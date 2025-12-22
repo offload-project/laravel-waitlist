@@ -29,7 +29,7 @@ final class WaitlistServiceProvider extends ServiceProvider
                 __DIR__.'/../config/waitlist.php' => config_path('waitlist.php'),
             ], 'waitlist-config');
 
-            $this->publishes([
+            $this->publishesMigrations([
                 __DIR__.'/../database/migrations' => database_path('migrations'),
             ], 'waitlist-migrations');
         }
