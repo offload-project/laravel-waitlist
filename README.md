@@ -356,31 +356,51 @@ return [
 
 ## Database Schema
 
-The `waitlist_entries` table includes:
+### `waitlists` table
 
 - `id` - Primary key
+- `name` - Waitlist name
+- `slug` - Unique identifier for referencing the waitlist
+- `description` - Optional description
+- `is_active` - Whether the waitlist is active (default: true)
+- `settings` - JSON field for custom settings
+- `created_at` and `updated_at` - Laravel timestamps
+
+Indexed fields: `slug`, `is_active`
+
+### `waitlist_entries` table
+
+- `id` - Primary key
+- `waitlist_id` - Foreign key to the waitlist (nullable for default waitlist)
 - `name` - User's name
-- `email` - User's email (unique)
+- `email` - User's email (unique per waitlist)
 - `status` - Status: pending, invited, or rejected
 - `invited_at` - Timestamp when invited
 - `metadata` - JSON field for custom data
 - `created_at` and `updated_at` - Laravel timestamps
 
 Indexed fields: `status`, `created_at`
+Unique constraint: `['waitlist_id', 'email']` (same email can join multiple waitlists)
 
 ## API Reference
 
 ### Facade Methods
 
 ```php
-// Adding entries
+// Managing waitlists
+Waitlist::create(string $name, string $slug, ?string $description = null, bool $isActive = true): Waitlist
+Waitlist::find(string $slug): ?Waitlist
+Waitlist::for(string|int|Waitlist $waitlist): self  // Set waitlist context
+Waitlist::getDefault(): Waitlist
+
+// Adding entries (uses current waitlist context or default)
 Waitlist::add(string $name, string $email, array $metadata = []): WaitlistEntry
 
 // Managing status
 Waitlist::invite(int|WaitlistEntry $entry): WaitlistEntry
 Waitlist::reject(int|WaitlistEntry $entry): WaitlistEntry
 
-// Retrieving entries
+// Retrieving entries (uses current waitlist context or default)
 Waitlist::getPending(): Collection
 Waitlist::getInvited(): Collection
 Waitlist::getAll(): Collection
@@ -395,7 +415,21 @@ Waitlist::countPending(): int
 Waitlist::countInvited(): int
 ```
 
-### Model Methods
+### Waitlist Model Methods
+
+```php
+// Relationships
+$waitlist->entries(): HasMany
+
+// Status checks
+$waitlist->isActive(): bool
+
+// Status updates
+$waitlist->activate(): self
+$waitlist->deactivate(): self
+```
+
+### WaitlistEntry Model Methods
 
 ```php
 // Status checks
