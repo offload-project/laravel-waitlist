@@ -1,0 +1,389 @@
+# Laravel Waitlist
+
+A simple and flexible waitlist package for Laravel applications. Allow users to join a waitlist with their name and email, and invite or notify them later when you're ready to launch.
+
+This package provides the core functionality without imposing any UI or API structure, giving you complete freedom to implement your own controllers, views, and API endpoints.
+
+## Features
+
+- Simple, clean API for managing waitlist entries
+- Built-in status management (pending, invited, rejected)
+- Email notifications when users are invited
+- Metadata support for custom data
+- Fully tested (21 tests, 37 assertions)
+- Configurable and extensible
+- No opinionated routes or views - use it your way
+
+## Requirements
+
+- PHP 8.4+
+- Laravel 11.0+
+
+## Installation
+
+Install the package via Composer:
+
+```bash
+composer require offload-project/laravel-waitlist
+```
+
+Publish and run the migrations:
+
+```bash
+php artisan vendor:publish --tag="waitlist-migrations"
+php artisan migrate
+```
+
+Optionally, publish the config file:
+
+```bash
+php artisan vendor:publish --tag="waitlist-config"
+```
+
+## Usage
+
+### Using the Facade
+
+The simplest way to interact with the waitlist is through the `Waitlist` facade:
+
+```php
+use OffloadProject\Waitlist\Facades\Waitlist;
+
+// Add a user to the waitlist
+$entry = Waitlist::add('John Doe', 'john@example.com');
+
+// Add with metadata
+$entry = Waitlist::add('John Doe', 'john@example.com', [
+    'referral_source' => 'twitter',
+    'interest' => 'premium',
+    'company' => 'Acme Inc',
+]);
+
+// Invite a user (sends notification automatically)
+Waitlist::invite($entry);
+// or by ID
+Waitlist::invite($entryId);
+
+// Reject a user
+Waitlist::reject($entry);
+// or by ID
+Waitlist::reject($entryId);
+
+// Get all pending entries
+$pending = Waitlist::getPending();
+
+// Get all invited entries
+$invited = Waitlist::getInvited();
+
+// Get all entries
+$all = Waitlist::getAll();
+
+// Get entry by email
+$entry = Waitlist::getByEmail('john@example.com');
+
+// Check if email exists
+if (Waitlist::exists('john@example.com')) {
+    // Email is on the waitlist
+}
+
+// Get statistics
+$total = Waitlist::count();
+$pending = Waitlist::countPending();
+$invited = Waitlist::countInvited();
+```
+
+### Using the Model
+
+You can also work directly with the `WaitlistEntry` model:
+
+```php
+use OffloadProject\Waitlist\Models\WaitlistEntry;
+
+// Create an entry
+$entry = WaitlistEntry::create([
+    'name' => 'Jane Doe',
+    'email' => 'jane@example.com',
+    'metadata' => ['source' => 'landing-page'],
+]);
+
+// Check status
+if ($entry->isPending()) {
+    // Entry is pending
+}
+
+if ($entry->isInvited()) {
+    // Entry has been invited
+}
+
+if ($entry->isRejected()) {
+    // Entry was rejected
+}
+
+// Update status
+$entry->markAsInvited();
+$entry->markAsRejected();
+
+// Query entries
+$pending = WaitlistEntry::where('status', 'pending')->get();
+$recent = WaitlistEntry::latest()->take(10)->get();
+```
+
+### Creating Your Own Controller
+
+Since this package doesn't include controllers, you can create your own to fit your needs:
+
+```php
+namespace App\Http\Controllers;
+
+use Illuminate\Http\Request;
+use OffloadProject\Waitlist\Facades\Waitlist;
+
+class WaitlistController extends Controller
+{
+    public function store(Request $request)
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|email|unique:waitlist_entries,email',
+        ]);
+
+        $entry = Waitlist::add(
+            $validated['name'],
+            $validated['email']
+        );
+
+        return response()->json([
+            'message' => 'Successfully added to waitlist!',
+            'data' => $entry,
+        ], 201);
+    }
+
+    public function stats()
+    {
+        return response()->json([
+            'total' => Waitlist::count(),
+            'pending' => Waitlist::countPending(),
+            'invited' => Waitlist::countInvited(),
+        ]);
+    }
+}
+```
+
+### Creating Your Own Livewire Component
+
+Example Livewire component for a waitlist form:
+
+```php
+namespace App\Livewire;
+
+use Livewire\Component;
+use OffloadProject\Waitlist\Facades\Waitlist;
+
+class WaitlistForm extends Component
+{
+    public $name = '';
+    public $email = '';
+    public $success = false;
+
+    public function submit()
+    {
+        $this->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|email|unique:waitlist_entries,email',
+        ]);
+
+        Waitlist::add($this->name, $this->email);
+
+        $this->success = true;
+        $this->reset(['name', 'email']);
+    }
+
+    public function render()
+    {
+        return view('livewire.waitlist-form');
+    }
+}
+```
+
+### Customizing the Notification
+
+Publish the config file and change the notification class:
+
+```php
+// config/waitlist.php
+'notification' => \App\Notifications\CustomWaitlistInvited::class,
+```
+
+Create your custom notification:
+
+```php
+namespace App\Notifications;
+
+use Illuminate\Notifications\Messages\MailMessage;
+use Illuminate\Notifications\Notification;
+use OffloadProject\Waitlist\Models\WaitlistEntry;
+
+class CustomWaitlistInvited extends Notification
+{
+    public function __construct(public WaitlistEntry $entry) {}
+
+    public function via($notifiable): array
+    {
+        return ['mail'];
+    }
+
+    public function toMail($notifiable): MailMessage
+    {
+        return (new MailMessage)
+            ->subject('Welcome to Our Platform!')
+            ->greeting("Hi {$this->entry->name}!")
+            ->line('Great news! Your wait is over.')
+            ->action('Get Started', url('/register'))
+            ->line('We can\'t wait to see what you build!');
+    }
+}
+```
+
+### Disabling Auto-Notifications
+
+If you want to send invitations manually:
+
+```php
+// config/waitlist.php
+'auto_send_invitation' => false,
+```
+
+Then send notifications manually:
+
+```php
+use OffloadProject\Waitlist\Notifications\WaitlistInvited;
+
+$entry = Waitlist::getByEmail('john@example.com');
+$entry->notify(new WaitlistInvited($entry));
+```
+
+### Using Metadata
+
+Store custom data with waitlist entries:
+
+```php
+Waitlist::add('John Doe', 'john@example.com', [
+    'referral_source' => 'Product Hunt',
+    'plan_interest' => 'Enterprise',
+    'company_size' => '50-100',
+    'use_case' => 'Marketing automation',
+]);
+
+// Access metadata
+$entry = Waitlist::getByEmail('john@example.com');
+$source = $entry->metadata['referral_source'];
+
+// Query by metadata
+$enterpriseInterest = WaitlistEntry::whereJsonContains('metadata->plan_interest', 'Enterprise')->get();
+```
+
+## Configuration
+
+```php
+return [
+    // The model class used for waitlist entries
+    'model' => \OffloadProject\Waitlist\Models\WaitlistEntry::class,
+
+    // Database table name
+    'table' => 'waitlist_entries',
+
+    // Auto-send invitation notifications
+    'auto_send_invitation' => true,
+
+    // Notification class
+    'notification' => \OffloadProject\Waitlist\Notifications\WaitlistInvited::class,
+];
+```
+
+## Database Schema
+
+The `waitlist_entries` table includes:
+
+- `id` - Primary key
+- `name` - User's name
+- `email` - User's email (unique)
+- `status` - Status: pending, invited, or rejected
+- `invited_at` - Timestamp when invited
+- `metadata` - JSON field for custom data
+- `created_at` and `updated_at` - Laravel timestamps
+
+Indexed fields: `status`, `created_at`
+
+## API Reference
+
+### Facade Methods
+
+```php
+// Adding entries
+Waitlist::add(string $name, string $email, array $metadata = []): WaitlistEntry
+
+// Managing status
+Waitlist::invite(int|WaitlistEntry $entry): WaitlistEntry
+Waitlist::reject(int|WaitlistEntry $entry): WaitlistEntry
+
+// Retrieving entries
+Waitlist::getPending(): Collection
+Waitlist::getInvited(): Collection
+Waitlist::getAll(): Collection
+Waitlist::getByEmail(string $email): ?WaitlistEntry
+
+// Checking existence
+Waitlist::exists(string $email): bool
+
+// Counting
+Waitlist::count(): int
+Waitlist::countPending(): int
+Waitlist::countInvited(): int
+```
+
+### Model Methods
+
+```php
+// Status checks
+$entry->isPending(): bool
+$entry->isInvited(): bool
+$entry->isRejected(): bool
+
+// Status updates
+$entry->markAsInvited(): self
+$entry->markAsRejected(): self
+```
+
+## Testing
+
+```bash
+composer test
+```
+
+## Code Quality
+
+```bash
+# Run code style fixer
+composer pint
+
+# Run static analysis
+composer analyse
+```
+
+## Example Use Cases
+
+### Launch Waitlist
+Collect emails before your product launch and invite users in batches.
+
+### Beta Access
+Manage beta testers and gradually roll out access.
+
+### Feature Waitlist
+Let users sign up for early access to specific features.
+
+### Priority Access
+Track who signed up first and give priority access.
+
+## License
+
+The MIT License (MIT). Please see [License File](LICENSE) for more information.

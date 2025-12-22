@@ -1,0 +1,65 @@
+{
+  "name": "offload-project/laravel-waitlist",
+  "description": "A simple and elegant waitlist package for Laravel applications",
+  "keywords": [
+    "laravel",
+    "waitlist",
+    "waiting-list",
+    "invitation",
+    "notifications",
+    "offload-project"
+  ],
+  "homepage": "https://github.com/offload-project/laravel-waitlist",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Offload Project"
+    }
+  ],
+  "require": {
+    "php": "^8.4",
+    "illuminate/support": "^11.0|^12.0"
+  },
+  "require-dev": {
+    "larastan/larastan": "^3.8.1",
+    "laravel/pint": "^1.26.0",
+    "orchestra/testbench": "^9.0|^10.8.0",
+    "pestphp/pest": "^3.0|^4.0",
+    "pestphp/pest-plugin-laravel": "^3.0|^4.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "OffloadProject\\Waitlist\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "OffloadProject\\Waitlist\\Tests\\": "tests/"
+    }
+  },
+  "extra": {
+    "laravel": {
+      "providers": [
+        "OffloadProject\\Waitlist\\WaitlistServiceProvider"
+      ],
+      "aliases": {
+        "Waitlist": "OffloadProject\\Waitlist\\Facades\\Waitlist"
+      }
+    }
+  },
+  "scripts": {
+    "test": "pest",
+    "test-coverage": "pest --coverage",
+    "analyse": "phpstan analyse --memory-limit=-1",
+    "analyse-baseline": "phpstan analyse --memory-limit=-1 --generate-baseline",
+    "pint": "vendor/bin/pint"
+  },
+  "config": {
+    "allow-plugins": {
+      "pestphp/pest-plugin": true
+    },
+    "sort-packages": true
+  },
+  "minimum-stability": "stable",
+  "prefer-stable": true
+}
