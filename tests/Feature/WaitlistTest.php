@@ -7,18 +7,87 @@ use OffloadProject\Waitlist\Facades\Waitlist;
 use OffloadProject\Waitlist\Models\WaitlistEntry;
 use OffloadProject\Waitlist\Notifications\WaitlistInvited;
 
-test('can add user to waitlist via facade', function () {
+test('can add user to default waitlist via facade', function () {
     $entry = Waitlist::add('John Doe', 'john@example.com');
 
     expect($entry)->toBeInstanceOf(WaitlistEntry::class)
         ->and($entry->name)->toBe('John Doe')
         ->and($entry->email)->toBe('john@example.com')
-        ->and($entry->status)->toBe('pending');
+        ->and($entry->status)->toBe('pending')
+        ->and($entry->waitlist_id)->not->toBeNull();
 
     $this->assertDatabaseHas('waitlist_entries', [
         'name' => 'John Doe',
         'email' => 'john@example.com',
     ]);
+});
+
+test('can create multiple waitlists', function () {
+    $beta = Waitlist::create('Beta Program', 'beta', 'Early access beta program');
+    $launch = Waitlist::create('Launch List', 'launch', 'Product launch waitlist');
+
+    expect($beta->slug)->toBe('beta')
+        ->and($launch->slug)->toBe('launch');
+
+    $this->assertDatabaseHas('waitlists', ['slug' => 'beta']);
+    $this->assertDatabaseHas('waitlists', ['slug' => 'launch']);
+});
+
+test('can add users to specific waitlists', function () {
+    $beta = Waitlist::create('Beta', 'beta');
+    $launch = Waitlist::create('Launch', 'launch');
+
+    $betaEntry = Waitlist::for('beta')->add('John Doe', 'john@example.com');
+    $launchEntry = Waitlist::for('launch')->add('Jane Doe', 'jane@example.com');
+
+    expect($betaEntry->waitlist_id)->toBe($beta->id)
+        ->and($launchEntry->waitlist_id)->toBe($launch->id);
+});
+
+test('same email can join different waitlists', function () {
+    $beta = Waitlist::create('Beta', 'beta');
+    $launch = Waitlist::create('Launch', 'launch');
+
+    Waitlist::for('beta')->add('John Doe', 'john@example.com');
+    Waitlist::for('launch')->add('John Doe', 'john@example.com');
+
+    expect(WaitlistEntry::where('email', 'john@example.com')->count())->toBe(2);
+});
+
+test('cannot add same email twice to same waitlist', function () {
+    $beta = Waitlist::create('Beta', 'beta');
+
+    Waitlist::for('beta')->add('John Doe', 'john@example.com');
+
+    $this->expectException(Illuminate\Database\QueryException::class);
+    Waitlist::for('beta')->add('John Doe', 'john@example.com');
+});
+
+test('can get pending entries for specific waitlist', function () {
+    $beta = Waitlist::create('Beta', 'beta');
+    $launch = Waitlist::create('Launch', 'launch');
+
+    Waitlist::for('beta')->add('User 1', 'user1@example.com');
+    Waitlist::for('beta')->add('User 2', 'user2@example.com');
+    Waitlist::for('launch')->add('User 3', 'user3@example.com');
+
+    $betaPending = Waitlist::for('beta')->getPending();
+    $launchPending = Waitlist::for('launch')->getPending();
+
+    expect($betaPending)->toHaveCount(2)
+        ->and($launchPending)->toHaveCount(1);
+});
+
+test('can count entries per waitlist', function () {
+    $beta = Waitlist::create('Beta', 'beta');
+    $launch = Waitlist::create('Launch', 'launch');
+
+    Waitlist::for('beta')->add('User 1', 'user1@example.com');
+    Waitlist::for('beta')->add('User 2', 'user2@example.com');
+    Waitlist::for('launch')->add('User 3', 'user3@example.com');
+
+    expect(Waitlist::for('beta')->count())->toBe(2)
+        ->and(Waitlist::for('launch')->count())->toBe(1);
 });
 
 test('can add user with metadata', function () {
@@ -36,11 +105,7 @@ test('can add user with metadata', function () {
 test('can invite user from waitlist', function () {
     Notification::fake();
 
-    $entry = WaitlistEntry::create([
-        'name' => 'John Doe',
-        'email' => 'john@example.com',
-    ]);
-
+    $entry = Waitlist::add('John Doe', 'john@example.com');
     Waitlist::invite($entry);
 
     $entry->refresh();
@@ -54,11 +119,7 @@ test('can invite user from waitlist', function () {
 test('can invite user by id', function () {
     Notification::fake();
 
-    $entry = WaitlistEntry::create([
-        'name' => 'Jane Doe',
-        'email' => 'jane@example.com',
-    ]);
-
+    $entry = Waitlist::add('Jane Doe', 'jane@example.com');
     Waitlist::invite($entry->id);
 
     $entry->refresh();
@@ -68,11 +129,7 @@ test('can invite user by id', function () {
 });
 
 test('can reject user from waitlist', function () {
-    $entry = WaitlistEntry::create([
-        'name' => 'John Doe',
-        'email' => 'john@example.com',
-    ]);
-
+    $entry = Waitlist::add('John Doe', 'john@example.com');
     Waitlist::reject($entry);
 
     $entry->refresh();
@@ -81,11 +138,7 @@ test('can reject user from waitlist', function () {
 });
 
 test('can reject user by id', function () {
-    $entry = WaitlistEntry::create([
-        'name' => 'Jane Doe',
-        'email' => 'jane@example.com',
-    ]);
-
+    $entry = Waitlist::add('Jane Doe', 'jane@example.com');
     Waitlist::reject($entry->id);
 
     $entry->refresh();
@@ -94,9 +147,11 @@ test('can reject user by id', function () {
 });
 
 test('can get all pending entries', function () {
-    WaitlistEntry::create(['name' => 'User 1', 'email' => 'user1@example.com', 'status' => 'pending']);
-    WaitlistEntry::create(['name' => 'User 2', 'email' => 'user2@example.com', 'status' => 'pending']);
-    WaitlistEntry::create(['name' => 'User 3', 'email' => 'user3@example.com', 'status' => 'invited']);
+    Waitlist::add('User 1', 'user1@example.com');
+    Waitlist::add('User 2', 'user2@example.com');
+
+    $entry3 = Waitlist::add('User 3', 'user3@example.com');
+    Waitlist::invite($entry3);
 
     $pending = Waitlist::getPending();
 
@@ -104,9 +159,12 @@ test('can get all pending entries', function () {
 });
 
 test('can get all invited entries', function () {
-    WaitlistEntry::create(['name' => 'User 1', 'email' => 'user1@example.com', 'status' => 'pending']);
-    WaitlistEntry::create(['name' => 'User 2', 'email' => 'user2@example.com', 'status' => 'invited']);
-    WaitlistEntry::create(['name' => 'User 3', 'email' => 'user3@example.com', 'status' => 'invited']);
+    $entry1 = Waitlist::add('User 1', 'user1@example.com');
+    $entry2 = Waitlist::add('User 2', 'user2@example.com');
+    Waitlist::add('User 3', 'user3@example.com');
+
+    Waitlist::invite($entry1);
+    Waitlist::invite($entry2);
 
     $invited = Waitlist::getInvited();
 
@@ -114,8 +172,8 @@ test('can get all invited entries', function () {
 });
 
 test('can get all entries', function () {
-    WaitlistEntry::create(['name' => 'User 1', 'email' => 'user1@example.com', 'status' => 'pending']);
-    WaitlistEntry::create(['name' => 'User 2', 'email' => 'user2@example.com', 'status' => 'invited']);
+    Waitlist::add('User 1', 'user1@example.com');
+    Waitlist::add('User 2', 'user2@example.com');
 
     $all = Waitlist::getAll();
 
@@ -123,10 +181,7 @@ test('can get all entries', function () {
 });
 
 test('can get entry by email', function () {
-    WaitlistEntry::create([
-        'name' => 'John Doe',
-        'email' => 'john@example.com',
-    ]);
+    Waitlist::add('John Doe', 'john@example.com');
 
     $entry = Waitlist::getByEmail('john@example.com');
 
@@ -141,41 +196,42 @@ test('returns null when email not found', function () {
 });
 
 test('can check if email exists in waitlist', function () {
-    WaitlistEntry::create(['name' => 'John Doe', 'email' => 'john@example.com']);
+    Waitlist::add('John Doe', 'john@example.com');
 
     expect(Waitlist::exists('john@example.com'))->toBeTrue()
         ->and(Waitlist::exists('nonexistent@example.com'))->toBeFalse();
 });
 
 test('can count total entries', function () {
-    WaitlistEntry::create(['name' => 'User 1', 'email' => 'user1@example.com']);
-    WaitlistEntry::create(['name' => 'User 2', 'email' => 'user2@example.com']);
+    Waitlist::add('User 1', 'user1@example.com');
+    Waitlist::add('User 2', 'user2@example.com');
 
     expect(Waitlist::count())->toBe(2);
 });
 
 test('can count pending entries', function () {
-    WaitlistEntry::create(['name' => 'User 1', 'email' => 'user1@example.com', 'status' => 'pending']);
-    WaitlistEntry::create(['name' => 'User 2', 'email' => 'user2@example.com', 'status' => 'pending']);
-    WaitlistEntry::create(['name' => 'User 3', 'email' => 'user3@example.com', 'status' => 'invited']);
+    Waitlist::add('User 1', 'user1@example.com');
+    Waitlist::add('User 2', 'user2@example.com');
+
+    $entry3 = Waitlist::add('User 3', 'user3@example.com');
+    Waitlist::invite($entry3);
 
     expect(Waitlist::countPending())->toBe(2);
 });
 
 test('can count invited entries', function () {
-    WaitlistEntry::create(['name' => 'User 1', 'email' => 'user1@example.com', 'status' => 'pending']);
-    WaitlistEntry::create(['name' => 'User 2', 'email' => 'user2@example.com', 'status' => 'invited']);
-    WaitlistEntry::create(['name' => 'User 3', 'email' => 'user3@example.com', 'status' => 'invited']);
+    $entry1 = Waitlist::add('User 1', 'user1@example.com');
+    $entry2 = Waitlist::add('User 2', 'user2@example.com');
+    Waitlist::add('User 3', 'user3@example.com');
+
+    Waitlist::invite($entry1);
+    Waitlist::invite($entry2);
 
     expect(Waitlist::countInvited())->toBe(2);
 });
 
 test('model has pending status check', function () {
-    $entry = WaitlistEntry::create([
-        'name' => 'John Doe',
-        'email' => 'john@example.com',
-        'status' => 'pending',
-    ]);
+    $entry = Waitlist::add('John Doe', 'john@example.com');
 
     expect($entry->isPending())->toBeTrue()
         ->and($entry->isInvited())->toBeFalse()
@@ -183,11 +239,10 @@ test('model has pending status check', function () {
 });
 
 test('model has invited status check', function () {
-    $entry = WaitlistEntry::create([
-        'name' => 'John Doe',
-        'email' => 'john@example.com',
-        'status' => 'invited',
-    ]);
+    $entry = Waitlist::add('John Doe', 'john@example.com');
+    Waitlist::invite($entry);
+
+    $entry->refresh();
 
     expect($entry->isPending())->toBeFalse()
         ->and($entry->isInvited())->toBeTrue()
@@ -195,11 +250,10 @@ test('model has invited status check', function () {
 });
 
 test('model has rejected status check', function () {
-    $entry = WaitlistEntry::create([
-        'name' => 'John Doe',
-        'email' => 'john@example.com',
-        'status' => 'rejected',
-    ]);
+    $entry = Waitlist::add('John Doe', 'john@example.com');
+    Waitlist::reject($entry);
+
+    $entry->refresh();
 
     expect($entry->isPending())->toBeFalse()
         ->and($entry->isInvited())->toBeFalse()
@@ -207,12 +261,7 @@ test('model has rejected status check', function () {
 });
 
 test('model can mark as invited', function () {
-    $entry = WaitlistEntry::create([
-        'name' => 'John Doe',
-        'email' => 'john@example.com',
-        'status' => 'pending',
-    ]);
-
+    $entry = Waitlist::add('John Doe', 'john@example.com');
     $entry->markAsInvited();
 
     expect($entry->status)->toBe('invited')
@@ -220,12 +269,7 @@ test('model can mark as invited', function () {
 });
 
 test('model can mark as rejected', function () {
-    $entry = WaitlistEntry::create([
-        'name' => 'John Doe',
-        'email' => 'john@example.com',
-        'status' => 'pending',
-    ]);
-
+    $entry = Waitlist::add('John Doe', 'john@example.com');
     $entry->markAsRejected();
 
     expect($entry->status)->toBe('rejected');
@@ -235,12 +279,46 @@ test('can disable auto notification on invite', function () {
     Notification::fake();
     config(['waitlist.auto_send_invitation' => false]);
 
-    $entry = WaitlistEntry::create([
-        'name' => 'John Doe',
-        'email' => 'john@example.com',
-    ]);
-
+    $entry = Waitlist::add('John Doe', 'john@example.com');
     Waitlist::invite($entry);
 
     Notification::assertNothingSent();
+});
+
+test('waitlist model has relationship with entries', function () {
+    $beta = Waitlist::create('Beta', 'beta');
+
+    Waitlist::for('beta')->add('User 1', 'user1@example.com');
+    Waitlist::for('beta')->add('User 2', 'user2@example.com');
+
+    expect($beta->entries)->toHaveCount(2);
+});
+
+test('entry model has relationship with waitlist', function () {
+    $beta = Waitlist::create('Beta', 'beta');
+    $entry = Waitlist::for('beta')->add('John Doe', 'john@example.com');
+
+    expect($entry->waitlist)->not->toBeNull()
+        ->and($entry->waitlist->slug)->toBe('beta');
+});
+
+test('can activate and deactivate waitlist', function () {
+    $beta = Waitlist::create('Beta', 'beta');
+
+    expect($beta->is_active)->toBeTrue();
+
+    $beta->deactivate();
+    expect($beta->is_active)->toBeFalse();
+
+    $beta->activate();
+    expect($beta->is_active)->toBeTrue();
+});
+
+test('can find waitlist by slug', function () {
+    Waitlist::create('Beta', 'beta');
+
+    $found = Waitlist::find('beta');
+
+    expect($found)->not->toBeNull()
+        ->and($found->slug)->toBe('beta');
 });

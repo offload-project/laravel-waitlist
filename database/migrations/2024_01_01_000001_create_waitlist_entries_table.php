@@ -12,13 +12,15 @@ return new class extends Migration
     {
         Schema::create('waitlist_entries', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('waitlist_id')->nullable()->constrained('waitlists')->cascadeOnDelete();
             $table->string('name');
-            $table->string('email')->unique();
+            $table->string('email');
             $table->string('status')->default('pending'); // pending, invited, rejected
             $table->timestamp('invited_at')->nullable();
             $table->json('metadata')->nullable();
             $table->timestamps();
 
+            $table->unique(['waitlist_id', 'email']);
             $table->index('status');
             $table->index('created_at');
         });

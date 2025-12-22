@@ -4,25 +4,28 @@ declare(strict_types=1);
 
 namespace OffloadProject\Waitlist\Models;
 
-use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Carbon;
 
 /**
  * @property int $id
+ * @property int|null $waitlist_id
  * @property string $name
  * @property string $email
  * @property string $status
- * @property CarbonInterface|null $invited_at
+ * @property Carbon|null $invited_at
  * @property array<string, mixed>|null $metadata
- * @property CarbonInterface $created_at
- * @property CarbonInterface $updated_at
+ * @property Carbon $created_at
+ * @property Carbon $updated_at
  */
 final class WaitlistEntry extends Model
 {
     use Notifiable;
 
     protected $fillable = [
+        'waitlist_id',
         'name',
         'email',
         'status',
@@ -34,6 +37,14 @@ final class WaitlistEntry extends Model
         'metadata' => 'array',
         'invited_at' => 'datetime',
     ];
+
+    /**
+     * @return BelongsTo<Waitlist, $this>
+     */
+    public function waitlist(): BelongsTo
+    {
+        return $this->belongsTo(Waitlist::class);
+    }
 
     public function isPending(): bool
     {

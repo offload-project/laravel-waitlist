@@ -5,6 +5,18 @@ declare(strict_types=1);
 return [
     /*
     |--------------------------------------------------------------------------
+    | Default Waitlist Slug
+    |--------------------------------------------------------------------------
+    |
+    | The slug of the default waitlist to use when no specific waitlist
+    | is specified. This waitlist will be created automatically if it
+    | doesn't exist.
+    |
+    */
+    'default_slug' => env('WAITLIST_DEFAULT_SLUG', 'default'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Waitlist Model
     |--------------------------------------------------------------------------
     |
