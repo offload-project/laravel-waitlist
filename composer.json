@@ -1,12 +1,15 @@
 {
   "name": "offload-project/laravel-waitlist",
-  "description": "A simple and elegant waitlist package for Laravel applications",
+  "description": "Manage multiple waitlists in Laravel - perfect for beta programs, product launches, and feature access control",
   "keywords": [
     "laravel",
     "waitlist",
     "waiting-list",
+    "multiple-waitlists",
     "invitation",
     "notifications",
+    "beta-access",
+    "launch",
     "offload-project"
   ],
   "homepage": "https://github.com/offload-project/laravel-waitlist",
@@ -18,7 +21,8 @@
   ],
   "require": {
     "php": "^8.4",
-    "illuminate/support": "^11.0|^12.0"
+    "illuminate/support": "^11.0|^12.0",
+    "illuminate/database": "^11.0|^12.0"
   },
   "require-dev": {
     "larastan/larastan": "^3.8.1",
