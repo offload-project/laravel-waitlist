@@ -20,6 +20,11 @@ class TestCase extends Orchestra
         );
     }
 
+    protected function defineDatabaseMigrations(): void
+    {
+        $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
+    }
+
     protected function getPackageProviders($app): array
     {
         return [
