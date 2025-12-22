@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.1](https://github.com/offload-project/laravel-waitlist/compare/v2.0.0...v2.0.1) (2025-12-22)
+
+
+### Bug Fixes
+
+* fix migrations publish ([#5](https://github.com/offload-project/laravel-waitlist/issues/5)) ([a8f3218](https://github.com/offload-project/laravel-waitlist/commit/a8f3218a19f704300c34d1e57992db41bc616660))
+
 ## [2.0.0](https://github.com/offload-project/laravel-waitlist/compare/v1.0.0...v2.0.0) (2025-12-22)
 
 
