@@ -1,18 +1,27 @@
+<p align="center">
+    <a href="https://packagist.org/packages/offload-project/laravel-waitlist"><img src="https://img.shields.io/packagist/v/offload-project/laravel-waitlist.svg?style=flat-square" alt="Latest Version on Packagist"></a>
+    <a href="https://github.com/offload-project/laravel-waitlist/actions"><img src="https://img.shields.io/github/actions/workflow/status/offload-project/laravel-waitlist/tests.yml?branch=main&style=flat-square" alt="GitHub Tests Action Status"></a>
+    <a href="https://packagist.org/packages/offload-project/laravel-waitlist"><img src="https://img.shields.io/packagist/dt/offload-project/laravel-waitlist.svg?style=flat-square" alt="Total Downloads"></a>
+</p>
+
 # Laravel Waitlist
 
-A simple and flexible waitlist package for Laravel applications. Allow users to join a waitlist with their name and email, and invite or notify them later when you're ready to launch.
+A simple and flexible waitlist package for Laravel applications. Manage multiple waitlists with ease - perfect for beta
+programs, product launches, feature access, and more.
 
-This package provides the core functionality without imposing any UI or API structure, giving you complete freedom to implement your own controllers, views, and API endpoints.
+This package provides the core functionality without imposing any UI or API structure, giving you complete freedom to
+implement your own controllers, views, and API endpoints.
 
 ## Features
 
-- Simple, clean API for managing waitlist entries
-- Built-in status management (pending, invited, rejected)
-- Email notifications when users are invited
-- Metadata support for custom data
-- Fully tested (21 tests, 37 assertions)
-- Configurable and extensible
-- No opinionated routes or views - use it your way
+- **Multiple Waitlists** - Create and manage as many waitlists as you need
+- **Simple API** - Clean, intuitive interface for managing waitlist entries
+- **Status Management** - Track entries as pending, invited, or rejected
+- **Email Notifications** - Automatic notifications when users are invited
+- **Metadata Support** - Store custom data with each entry
+- **Fully Tested** - 31 comprehensive tests, 58 assertions
+- **Type Safe** - Full PHPStan level 5 compliance
+- **Flexible** - No opinionated routes or views - use it your way
 
 ## Requirements
 
@@ -42,54 +51,99 @@ php artisan vendor:publish --tag="waitlist-config"
 
 ## Usage
 
-### Using the Facade
+### Quick Start (Single Waitlist)
 
-The simplest way to interact with the waitlist is through the `Waitlist` facade:
+If you only need one waitlist, just start using it - a default waitlist is created automatically:
 
 ```php
 use OffloadProject\Waitlist\Facades\Waitlist;
 
-// Add a user to the waitlist
+// Add users to the default waitlist
 $entry = Waitlist::add('John Doe', 'john@example.com');
 
+// Invite a user (sends notification automatically)
+Waitlist::invite($entry);
+
+// Get statistics
+$total = Waitlist::count();
+$pending = Waitlist::countPending();
+```
+
+### Multiple Waitlists
+
+Create and manage multiple waitlists for different purposes:
+
+```php
+use OffloadProject\Waitlist\Facades\Waitlist;
+
+// Create separate waitlists
+$beta = Waitlist::create('Beta Program', 'beta', 'Early access to new features');
+$launch = Waitlist::create('Product Launch', 'launch', 'Get notified when we launch');
+$vip = Waitlist::create('VIP Access', 'vip', 'Premium tier waitlist');
+
+// Add users to specific waitlists
+Waitlist::for('beta')->add('John Doe', 'john@example.com');
+Waitlist::for('launch')->add('Jane Smith', 'jane@example.com');
+Waitlist::for('vip')->add('Bob Wilson', 'bob@example.com');
+
+// Same person can join multiple waitlists
+Waitlist::for('beta')->add('Alice Johnson', 'alice@example.com');
+Waitlist::for('launch')->add('Alice Johnson', 'alice@example.com');
+
+// Get entries for a specific waitlist
+$betaEntries = Waitlist::for('beta')->getPending();
+$launchCount = Waitlist::for('launch')->count();
+
+// Invite users from a specific waitlist
+$entry = Waitlist::for('beta')->getByEmail('john@example.com');
+Waitlist::invite($entry);
+```
+
+### Complete API
+
+```php
+use OffloadProject\Waitlist\Facades\Waitlist;
+
+// Create waitlists
+$beta = Waitlist::create('Beta Program', 'beta', 'Description');
+$waitlist = Waitlist::find('beta'); // Find by slug
+
+// Add users
+$entry = Waitlist::for('beta')->add('John Doe', 'john@example.com');
+
 // Add with metadata
-$entry = Waitlist::add('John Doe', 'john@example.com', [
+$entry = Waitlist::for('launch')->add('Jane Doe', 'jane@example.com', [
     'referral_source' => 'twitter',
     'interest' => 'premium',
     'company' => 'Acme Inc',
 ]);
 
-// Invite a user (sends notification automatically)
-Waitlist::invite($entry);
-// or by ID
-Waitlist::invite($entryId);
-
-// Reject a user
+// Invite and reject
+Waitlist::invite($entry);        // By model
+Waitlist::invite($entryId);      // By ID
 Waitlist::reject($entry);
-// or by ID
 Waitlist::reject($entryId);
 
-// Get all pending entries
-$pending = Waitlist::getPending();
+// Query entries
+$pending = Waitlist::for('beta')->getPending();
+$invited = Waitlist::for('beta')->getInvited();
+$all = Waitlist::for('beta')->getAll();
+$entry = Waitlist::for('beta')->getByEmail('john@example.com');
 
-// Get all invited entries
-$invited = Waitlist::getInvited();
-
-// Get all entries
-$all = Waitlist::getAll();
-
-// Get entry by email
-$entry = Waitlist::getByEmail('john@example.com');
-
-// Check if email exists
-if (Waitlist::exists('john@example.com')) {
-    // Email is on the waitlist
+// Check existence
+if (Waitlist::for('beta')->exists('john@example.com')) {
+    // User is on the beta waitlist
 }
 
 // Get statistics
-$total = Waitlist::count();
-$pending = Waitlist::countPending();
-$invited = Waitlist::countInvited();
+$total = Waitlist::for('beta')->count();
+$pending = Waitlist::for('beta')->countPending();
+$invited = Waitlist::for('beta')->countInvited();
+
+// Manage waitlist status
+$beta->activate();
+$beta->deactivate();
+$beta->isActive(); // true/false
 ```
 
 ### Using the Model
@@ -372,17 +426,61 @@ composer analyse
 
 ## Example Use Cases
 
-### Launch Waitlist
-Collect emails before your product launch and invite users in batches.
+### Multiple Product Launches
 
-### Beta Access
-Manage beta testers and gradually roll out access.
+```php
+// Different waitlists for different products
+Waitlist::create('Product A', 'product-a');
+Waitlist::create('Product B', 'product-b');
 
-### Feature Waitlist
-Let users sign up for early access to specific features.
+Waitlist::for('product-a')->add($name, $email);
+Waitlist::for('product-b')->add($name, $email);
+```
 
-### Priority Access
-Track who signed up first and give priority access.
+### Tiered Access Programs
+
+```php
+// Different tiers of access
+Waitlist::create('Free Tier', 'free');
+Waitlist::create('Pro Tier', 'pro');
+Waitlist::create('Enterprise', 'enterprise');
+
+// Users can be on multiple tiers
+Waitlist::for('free')->add($name, $email);
+Waitlist::for('pro')->add($name, $email);
+```
+
+### Feature-Specific Waitlists
+
+```php
+// Individual features
+Waitlist::create('AI Assistant', 'ai-assistant');
+Waitlist::create('Advanced Analytics', 'analytics');
+Waitlist::create('API Access', 'api');
+
+// Track interest per feature
+Waitlist::for('ai-assistant')->add($name, $email);
+```
+
+### Regional Launches
+
+```php
+// Different regions
+Waitlist::create('North America', 'na');
+Waitlist::create('Europe', 'eu');
+Waitlist::create('Asia Pacific', 'apac');
+
+Waitlist::for('na')->add($name, $email);
+```
+
+### Beta Programs
+
+```php
+// Different beta phases
+Waitlist::create('Alpha Testers', 'alpha');
+Waitlist::create('Beta Testers', 'beta');
+Waitlist::create('Early Access', 'early-access');
+```
 
 ## License
 
