@@ -3,8 +3,10 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Notification;
+use OffloadProject\Waitlist\Exceptions\UnverifiedEntryException;
 use OffloadProject\Waitlist\Facades\Waitlist;
 use OffloadProject\Waitlist\Models\WaitlistEntry;
+use OffloadProject\Waitlist\Notifications\VerifyWaitlistEmail;
 use OffloadProject\Waitlist\Notifications\WaitlistInvited;
 
 test('can add user to default waitlist via facade', function () {
@@ -321,4 +323,145 @@ test('can find waitlist by slug', function () {
 
     expect($found)->not->toBeNull()
         ->and($found->slug)->toBe('beta');
+});
+
+// Email Verification Tests
+
+test('entry is not verified by default', function () {
+    $entry = Waitlist::add('John Doe', 'john@example.com');
+
+    expect($entry->isVerified())->toBeFalse()
+        ->and($entry->verified_at)->toBeNull()
+        ->and($entry->verification_token)->toBeNull();
+});
+
+test('can generate verification token', function () {
+    $entry = Waitlist::add('John Doe', 'john@example.com');
+    $entry->generateVerificationToken();
+
+    expect($entry->verification_token)->not->toBeNull()
+        ->and(mb_strlen($entry->verification_token))->toBe(64);
+});
+
+test('can mark entry as verified', function () {
+    $entry = Waitlist::add('John Doe', 'john@example.com');
+    $entry->generateVerificationToken();
+    $entry->markAsVerified();
+
+    expect($entry->isVerified())->toBeTrue()
+        ->and($entry->verified_at)->not->toBeNull()
+        ->and($entry->verification_token)->toBeNull();
+});
+
+test('isPendingVerification returns true when token exists but not verified', function () {
+    $entry = Waitlist::add('John Doe', 'john@example.com');
+    $entry->generateVerificationToken();
+
+    expect($entry->isPendingVerification())->toBeTrue();
+
+    $entry->markAsVerified();
+
+    expect($entry->isPendingVerification())->toBeFalse();
+});
+
+test('can send verification notification', function () {
+    Notification::fake();
+
+    $entry = Waitlist::add('John Doe', 'john@example.com');
+    Waitlist::sendVerification($entry);
+
+    $entry->refresh();
+
+    expect($entry->verification_token)->not->toBeNull();
+    Notification::assertSentTo($entry, VerifyWaitlistEmail::class);
+});
+
+test('can verify entry by token', function () {
+    $entry = Waitlist::add('John Doe', 'john@example.com');
+    $entry->generateVerificationToken();
+    $token = $entry->verification_token;
+
+    $verified = Waitlist::verify($token);
+
+    expect($verified)->not->toBeNull()
+        ->and($verified->id)->toBe($entry->id)
+        ->and($verified->isVerified())->toBeTrue();
+});
+
+test('verify returns null for invalid token', function () {
+    $result = Waitlist::verify('invalid-token');
+
+    expect($result)->toBeNull();
+});
+
+test('auto sends verification when enabled', function () {
+    Notification::fake();
+    config(['waitlist.verification.enabled' => true]);
+
+    $entry = Waitlist::add('John Doe', 'john@example.com');
+
+    Notification::assertSentTo($entry, VerifyWaitlistEmail::class);
+});
+
+test('does not auto send verification when disabled', function () {
+    Notification::fake();
+    config(['waitlist.verification.enabled' => false]);
+
+    $entry = Waitlist::add('John Doe', 'john@example.com');
+
+    Notification::assertNotSentTo($entry, VerifyWaitlistEmail::class);
+});
+
+test('cannot invite unverified entry when verification required', function () {
+    Notification::fake();
+    config(['waitlist.verification.enabled' => true]);
+    config(['waitlist.verification.require_before_invite' => true]);
+
+    $entry = Waitlist::add('John Doe', 'john@example.com');
+
+    expect(fn () => Waitlist::invite($entry))
+        ->toThrow(UnverifiedEntryException::class);
+});
+
+test('can invite unverified entry when verification not required', function () {
+    Notification::fake();
+    config(['waitlist.verification.enabled' => true]);
+    config(['waitlist.verification.require_before_invite' => false]);
+
+    $entry = Waitlist::add('John Doe', 'john@example.com');
+    Waitlist::invite($entry);
+
+    $entry->refresh();
+
+    expect($entry->isInvited())->toBeTrue();
+});
+
+test('can invite verified entry when verification required', function () {
+    Notification::fake();
+    config(['waitlist.verification.enabled' => true]);
+    config(['waitlist.verification.require_before_invite' => true]);
+
+    $entry = Waitlist::add('John Doe', 'john@example.com');
+    $entry->refresh();
+
+    $token = $entry->verification_token;
+    Waitlist::verify($token);
+    $entry->refresh();
+
+    Waitlist::invite($entry);
+    $entry->refresh();
+
+    expect($entry->isInvited())->toBeTrue();
+});
+
+test('can invite without verification when verification disabled', function () {
+    Notification::fake();
+    config(['waitlist.verification.enabled' => false]);
+
+    $entry = Waitlist::add('John Doe', 'john@example.com');
+    Waitlist::invite($entry);
+
+    $entry->refresh();
+
+    expect($entry->isInvited())->toBeTrue();
 });

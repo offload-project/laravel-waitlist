@@ -17,6 +17,8 @@ use Illuminate\Support\Carbon;
  * @property string $status
  * @property Carbon|null $invited_at
  * @property array<string, mixed>|null $metadata
+ * @property string|null $verification_token
+ * @property Carbon|null $verified_at
  * @property Carbon $created_at
  * @property Carbon $updated_at
  */
@@ -31,11 +33,14 @@ final class WaitlistEntry extends Model
         'status',
         'invited_at',
         'metadata',
+        'verification_token',
+        'verified_at',
     ];
 
     protected $casts = [
         'metadata' => 'array',
         'invited_at' => 'datetime',
+        'verified_at' => 'datetime',
     ];
 
     /**
@@ -75,6 +80,35 @@ final class WaitlistEntry extends Model
     {
         $this->update([
             'status' => 'rejected',
+        ]);
+
+        return $this;
+    }
+
+    public function isVerified(): bool
+    {
+        return $this->verified_at !== null;
+    }
+
+    public function isPendingVerification(): bool
+    {
+        return $this->verification_token !== null && $this->verified_at === null;
+    }
+
+    public function markAsVerified(): self
+    {
+        $this->update([
+            'verified_at' => now(),
+            'verification_token' => null,
+        ]);
+
+        return $this;
+    }
+
+    public function generateVerificationToken(): self
+    {
+        $this->update([
+            'verification_token' => bin2hex(random_bytes(32)),
         ]);
 
         return $this;

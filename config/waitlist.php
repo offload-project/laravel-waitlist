@@ -57,4 +57,34 @@ return [
     |
     */
     'notification' => OffloadProject\Waitlist\Notifications\WaitlistInvited::class,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Email Verification
+    |--------------------------------------------------------------------------
+    |
+    | These options control email verification for waitlist entries.
+    | When enabled, users must verify their email before being invited.
+    |
+    */
+    'verification' => [
+        'enabled' => env('WAITLIST_VERIFICATION_ENABLED', false),
+        'require_before_invite' => env('WAITLIST_REQUIRE_VERIFICATION', true),
+        'notification' => OffloadProject\Waitlist\Notifications\VerifyWaitlistEmail::class,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Routes
+    |--------------------------------------------------------------------------
+    |
+    | Configuration for the package routes. When enabled, the package will
+    | register verification routes automatically.
+    |
+    */
+    'routes' => [
+        'enabled' => true,
+        'prefix' => 'waitlist',
+        'middleware' => ['web'],
+    ],
 ];
