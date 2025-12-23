@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OffloadProject\Waitlist;
 
 use Illuminate\Database\Eloquent\Collection;
+use OffloadProject\Waitlist\Exceptions\UnverifiedEntryException;
 use OffloadProject\Waitlist\Models\Waitlist;
 use OffloadProject\Waitlist\Models\WaitlistEntry;
 
@@ -67,24 +68,62 @@ final class WaitlistService
     {
         $waitlist = $this->currentWaitlist ?? $this->getDefault();
 
-        return WaitlistEntry::create([
+        $entry = WaitlistEntry::create([
             'waitlist_id' => $waitlist->id,
             'name' => $name,
             'email' => $email,
             'metadata' => $metadata,
             'status' => 'pending',
         ]);
+
+        if (config('waitlist.verification.enabled', false)) {
+            $this->sendVerification($entry);
+        }
+
+        return $entry;
     }
 
+    /**
+     * @throws UnverifiedEntryException
+     */
     public function invite(int|WaitlistEntry $entry): WaitlistEntry
     {
         $entry = $this->resolveEntry($entry);
+
+        if ($this->requiresVerificationBeforeInvite() && ! $entry->isVerified()) {
+            throw new UnverifiedEntryException($entry);
+        }
+
         $entry->markAsInvited();
 
         if (config('waitlist.auto_send_invitation', true)) {
             $notificationClass = config('waitlist.notification');
             $entry->notify(new $notificationClass($entry));
         }
+
+        return $entry;
+    }
+
+    public function sendVerification(int|WaitlistEntry $entry): WaitlistEntry
+    {
+        $entry = $this->resolveEntry($entry);
+        $entry->generateVerificationToken();
+
+        $notificationClass = config('waitlist.verification.notification');
+        $entry->notify(new $notificationClass($entry));
+
+        return $entry;
+    }
+
+    public function verify(string $token): ?WaitlistEntry
+    {
+        $entry = WaitlistEntry::where('verification_token', $token)->first();
+
+        if ($entry === null) {
+            return null;
+        }
+
+        $entry->markAsVerified();
 
         return $entry;
     }
@@ -160,6 +199,12 @@ final class WaitlistService
         return $this->query()
             ->where('status', 'invited')
             ->count();
+    }
+
+    private function requiresVerificationBeforeInvite(): bool
+    {
+        return config('waitlist.verification.enabled', false)
+            && config('waitlist.verification.require_before_invite', true);
     }
 
     /**

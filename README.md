@@ -17,9 +17,10 @@ implement your own controllers, views, and API endpoints.
 - **Multiple Waitlists** - Create and manage as many waitlists as you need
 - **Simple API** - Clean, intuitive interface for managing waitlist entries
 - **Status Management** - Track entries as pending, invited, or rejected
+- **Email Verification** - Optional email verification before inviting users
 - **Email Notifications** - Automatic notifications when users are invited
 - **Metadata Support** - Store custom data with each entry
-- **Fully Tested** - 31 comprehensive tests, 58 assertions
+- **Fully Tested** - 44 comprehensive tests, 80 assertions
 - **Type Safe** - Full PHPStan level 5 compliance
 - **Flexible** - No opinionated routes or views - use it your way
 
@@ -336,6 +337,105 @@ $source = $entry->metadata['referral_source'];
 $enterpriseInterest = WaitlistEntry::whereJsonContains('metadata->plan_interest', 'Enterprise')->get();
 ```
 
+### Email Verification
+
+Optionally require users to verify their email before they can be invited:
+
+```php
+// config/waitlist.php
+'verification' => [
+    'enabled' => true,  // Enable email verification
+    'require_before_invite' => true,  // Block invites until verified
+],
+```
+
+Or via environment variables:
+
+```env
+WAITLIST_VERIFICATION_ENABLED=true
+WAITLIST_REQUIRE_VERIFICATION=true
+```
+
+When verification is enabled:
+
+```php
+use OffloadProject\Waitlist\Facades\Waitlist;
+
+// Adding an entry automatically sends a verification email
+$entry = Waitlist::add('John Doe', 'john@example.com');
+
+// Check verification status
+$entry->isVerified();           // false initially
+$entry->isPendingVerification(); // true after verification email sent
+
+// Manually send/resend verification email
+Waitlist::sendVerification($entry);
+
+// Verify programmatically (normally handled by the verification route)
+Waitlist::verify($token);
+
+// Attempting to invite an unverified entry throws an exception
+// when require_before_invite is true
+try {
+    Waitlist::invite($entry);
+} catch (\OffloadProject\Waitlist\Exceptions\UnverifiedEntryException $e) {
+    // Handle unverified entry
+}
+```
+
+The package provides a verification route at `/waitlist/verify/{token}` by default. Configure the routes in your config:
+
+```php
+// config/waitlist.php
+'routes' => [
+    'enabled' => true,        // Set to false to define your own routes
+    'prefix' => 'waitlist',   // URL prefix
+    'middleware' => ['web'],  // Middleware to apply
+],
+```
+
+#### Custom Verification Notification
+
+Create your own verification notification:
+
+```php
+// config/waitlist.php
+'verification' => [
+    'enabled' => true,
+    'require_before_invite' => true,
+    'notification' => \App\Notifications\CustomVerifyEmail::class,
+],
+```
+
+```php
+namespace App\Notifications;
+
+use Illuminate\Notifications\Messages\MailMessage;
+use Illuminate\Notifications\Notification;
+use OffloadProject\Waitlist\Models\WaitlistEntry;
+
+class CustomVerifyEmail extends Notification
+{
+    public function __construct(public WaitlistEntry $entry) {}
+
+    public function via($notifiable): array
+    {
+        return ['mail'];
+    }
+
+    public function toMail($notifiable): MailMessage
+    {
+        $url = route('waitlist.verify', ['token' => $this->entry->verification_token]);
+
+        return (new MailMessage)
+            ->subject('Confirm your spot on the waitlist')
+            ->greeting("Hi {$this->entry->name}!")
+            ->line('Please verify your email to secure your place.')
+            ->action('Verify Email', $url);
+    }
+}
+```
+
 ## Configuration
 
 ```php
@@ -349,8 +449,22 @@ return [
     // Auto-send invitation notifications
     'auto_send_invitation' => true,
 
-    // Notification class
+    // Notification class for invitations
     'notification' => \OffloadProject\Waitlist\Notifications\WaitlistInvited::class,
+
+    // Email verification settings
+    'verification' => [
+        'enabled' => false,  // Enable/disable email verification
+        'require_before_invite' => true,  // Require verification before inviting
+        'notification' => \OffloadProject\Waitlist\Notifications\VerifyWaitlistEmail::class,
+    ],
+
+    // Route configuration
+    'routes' => [
+        'enabled' => true,  // Enable package routes
+        'prefix' => 'waitlist',  // URL prefix
+        'middleware' => ['web'],  // Middleware
+    ],
 ];
 ```
 
@@ -377,9 +491,11 @@ Indexed fields: `slug`, `is_active`
 - `status` - Status: pending, invited, or rejected
 - `invited_at` - Timestamp when invited
 - `metadata` - JSON field for custom data
+- `verification_token` - Token for email verification (nullable)
+- `verified_at` - Timestamp when email was verified (nullable)
 - `created_at` and `updated_at` - Laravel timestamps
 
-Indexed fields: `status`, `created_at`
+Indexed fields: `status`, `created_at`, `verification_token`
 Unique constraint: `['waitlist_id', 'email']` (same email can join multiple waitlists)
 
 ## API Reference
@@ -399,6 +515,10 @@ Waitlist::add(string $name, string $email, array $metadata = []): WaitlistEntry
 // Managing status
 Waitlist::invite(int|WaitlistEntry $entry): WaitlistEntry
 Waitlist::reject(int|WaitlistEntry $entry): WaitlistEntry
+
+// Email verification
+Waitlist::sendVerification(int|WaitlistEntry $entry): WaitlistEntry
+Waitlist::verify(string $token): ?WaitlistEntry
 
 // Retrieving entries (uses current waitlist context or default)
 Waitlist::getPending(): Collection
@@ -437,9 +557,15 @@ $entry->isPending(): bool
 $entry->isInvited(): bool
 $entry->isRejected(): bool
 
+// Verification checks
+$entry->isVerified(): bool
+$entry->isPendingVerification(): bool
+
 // Status updates
 $entry->markAsInvited(): self
 $entry->markAsRejected(): self
+$entry->markAsVerified(): self
+$entry->generateVerificationToken(): self
 ```
 
 ## Testing
