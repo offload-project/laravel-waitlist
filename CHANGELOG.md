@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.0](https://github.com/offload-project/laravel-waitlist/compare/v2.0.2...v2.1.0) (2025-12-23)
+
+
+### Features
+
+* add email verification ([#10](https://github.com/offload-project/laravel-waitlist/issues/10)) ([6caad82](https://github.com/offload-project/laravel-waitlist/commit/6caad8211862e97c5107f2b5433a2473b1319f39))
+
 ## [2.0.2](https://github.com/offload-project/laravel-waitlist/compare/v2.0.1...v2.0.2) (2025-12-22)
 
 
