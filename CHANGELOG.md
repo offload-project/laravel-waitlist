@@ -1,5 +1,16 @@
 # Changelog
 
+## [3.0.0](https://github.com/offload-project/laravel-waitlist/compare/v2.1.0...v3.0.0) (2025-12-28)
+
+
+### ⚠ BREAKING CHANGES
+
+* use laravel-invite-only for invites ([#12](https://github.com/offload-project/laravel-waitlist/issues/12))
+
+### Code Refactoring
+
+* use laravel-invite-only for invites ([#12](https://github.com/offload-project/laravel-waitlist/issues/12)) ([e434106](https://github.com/offload-project/laravel-waitlist/commit/e43410622e4ee4a8143f300642db8eab48219f3e))
+
 ## [2.1.0](https://github.com/offload-project/laravel-waitlist/compare/v2.0.2...v2.1.0) (2025-12-23)
 
 
