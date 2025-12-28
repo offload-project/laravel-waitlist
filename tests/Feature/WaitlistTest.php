@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Notification;
+use OffloadProject\InviteOnly\Models\Invitation;
 use OffloadProject\Waitlist\Exceptions\UnverifiedEntryException;
 use OffloadProject\Waitlist\Facades\Waitlist;
 use OffloadProject\Waitlist\Models\WaitlistEntry;
@@ -113,9 +114,13 @@ test('can invite user from waitlist', function () {
     $entry->refresh();
 
     expect($entry->status)->toBe('invited')
-        ->and($entry->invited_at)->not->toBeNull();
+        ->and($entry->invited_at)->not->toBeNull()
+        ->and($entry->invitation_id)->not->toBeNull();
 
-    Notification::assertSentTo($entry, WaitlistInvited::class);
+    // Verify an Invitation was created via laravel-invite-only
+    $invitation = Invitation::find($entry->invitation_id);
+    expect($invitation)->not->toBeNull()
+        ->and($invitation->email)->toBe('john@example.com');
 });
 
 test('can invite user by id', function () {
@@ -127,7 +132,8 @@ test('can invite user by id', function () {
     $entry->refresh();
 
     expect($entry->status)->toBe('invited')
-        ->and($entry->invited_at)->not->toBeNull();
+        ->and($entry->invited_at)->not->toBeNull()
+        ->and($entry->invitation_id)->not->toBeNull();
 });
 
 test('can reject user from waitlist', function () {
@@ -149,6 +155,8 @@ test('can reject user by id', function () {
 });
 
 test('can get all pending entries', function () {
+    Notification::fake();
+
     Waitlist::add('User 1', 'user1@example.com');
     Waitlist::add('User 2', 'user2@example.com');
 
@@ -161,6 +169,8 @@ test('can get all pending entries', function () {
 });
 
 test('can get all invited entries', function () {
+    Notification::fake();
+
     $entry1 = Waitlist::add('User 1', 'user1@example.com');
     $entry2 = Waitlist::add('User 2', 'user2@example.com');
     Waitlist::add('User 3', 'user3@example.com');
@@ -212,6 +222,8 @@ test('can count total entries', function () {
 });
 
 test('can count pending entries', function () {
+    Notification::fake();
+
     Waitlist::add('User 1', 'user1@example.com');
     Waitlist::add('User 2', 'user2@example.com');
 
@@ -222,6 +234,8 @@ test('can count pending entries', function () {
 });
 
 test('can count invited entries', function () {
+    Notification::fake();
+
     $entry1 = Waitlist::add('User 1', 'user1@example.com');
     $entry2 = Waitlist::add('User 2', 'user2@example.com');
     Waitlist::add('User 3', 'user3@example.com');
@@ -241,6 +255,8 @@ test('model has pending status check', function () {
 });
 
 test('model has invited status check', function () {
+    Notification::fake();
+
     $entry = Waitlist::add('John Doe', 'john@example.com');
     Waitlist::invite($entry);
 
@@ -277,14 +293,19 @@ test('model can mark as rejected', function () {
     expect($entry->status)->toBe('rejected');
 });
 
-test('can disable auto notification on invite', function () {
+test('can disable auto waitlist notification on invite', function () {
     Notification::fake();
     config(['waitlist.auto_send_invitation' => false]);
 
     $entry = Waitlist::add('John Doe', 'john@example.com');
     Waitlist::invite($entry);
 
-    Notification::assertNothingSent();
+    // WaitlistInvited notification should not be sent (disabled by default)
+    Notification::assertNotSentTo($entry, WaitlistInvited::class);
+
+    // But an Invitation should still be created
+    $entry->refresh();
+    expect($entry->invitation_id)->not->toBeNull();
 });
 
 test('waitlist model has relationship with entries', function () {
@@ -302,6 +323,18 @@ test('entry model has relationship with waitlist', function () {
 
     expect($entry->waitlist)->not->toBeNull()
         ->and($entry->waitlist->slug)->toBe('beta');
+});
+
+test('entry model has relationship with invitation', function () {
+    Notification::fake();
+
+    $entry = Waitlist::add('John Doe', 'john@example.com');
+    Waitlist::invite($entry);
+
+    $entry->refresh();
+
+    expect($entry->invitation)->not->toBeNull()
+        ->and($entry->invitation->email)->toBe('john@example.com');
 });
 
 test('can activate and deactivate waitlist', function () {

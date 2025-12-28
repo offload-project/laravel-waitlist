@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
+use OffloadProject\InviteOnly\Models\Invitation;
 
 /**
  * @property int $id
@@ -19,6 +20,7 @@ use Illuminate\Support\Carbon;
  * @property array<string, mixed>|null $metadata
  * @property string|null $verification_token
  * @property Carbon|null $verified_at
+ * @property int|null $invitation_id
  * @property Carbon $created_at
  * @property Carbon $updated_at
  */
@@ -35,6 +37,7 @@ final class WaitlistEntry extends Model
         'metadata',
         'verification_token',
         'verified_at',
+        'invitation_id',
     ];
 
     protected $casts = [
@@ -49,6 +52,14 @@ final class WaitlistEntry extends Model
     public function waitlist(): BelongsTo
     {
         return $this->belongsTo(Waitlist::class);
+    }
+
+    /**
+     * @return BelongsTo<Invitation, $this>
+     */
+    public function invitation(): BelongsTo
+    {
+        return $this->belongsTo(Invitation::class);
     }
 
     public function isPending(): bool

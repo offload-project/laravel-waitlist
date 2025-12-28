@@ -27,6 +27,7 @@
   "require-dev": {
     "larastan/larastan": "^3.8.1",
     "laravel/pint": "^1.26.0",
+    "offload-project/laravel-invite-only": "^1.0",
     "orchestra/testbench": "^9.0|^10.8.0",
     "pestphp/pest": "^3.0|^4.0",
     "pestphp/pest-plugin-laravel": "^3.0|^4.0"

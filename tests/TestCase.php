@@ -4,6 +4,7 @@ namespace OffloadProject\Waitlist\Tests;
 
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use OffloadProject\InviteOnly\InviteOnlyServiceProvider;
 use OffloadProject\Waitlist\WaitlistServiceProvider;
 use Orchestra\Testbench\TestCase as Orchestra;
 
@@ -22,12 +23,20 @@ class TestCase extends Orchestra
 
     protected function defineDatabaseMigrations(): void
     {
+        // Load invite-only migrations first (dependency)
+        $inviteOnlyMigrations = __DIR__.'/../vendor/offload-project/laravel-invite-only/database/migrations';
+        if (is_dir($inviteOnlyMigrations)) {
+            $this->loadMigrationsFrom($inviteOnlyMigrations);
+        }
+
+        // Load waitlist migrations
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
     }
 
     protected function getPackageProviders($app): array
     {
         return [
+            InviteOnlyServiceProvider::class,
             WaitlistServiceProvider::class,
         ];
     }
@@ -35,6 +44,7 @@ class TestCase extends Orchestra
     protected function getPackageAliases($app): array
     {
         return [
+            'InviteOnly' => \OffloadProject\InviteOnly\Facades\InviteOnly::class,
             'Waitlist' => \OffloadProject\Waitlist\Facades\Waitlist::class,
         ];
     }
