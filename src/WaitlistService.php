@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace OffloadProject\Waitlist;
 
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Model;
+use OffloadProject\InviteOnly\Facades\InviteOnly;
 use OffloadProject\Waitlist\Exceptions\UnverifiedEntryException;
 use OffloadProject\Waitlist\Models\Waitlist;
 use OffloadProject\Waitlist\Models\WaitlistEntry;
@@ -94,9 +96,17 @@ final class WaitlistService
             throw new UnverifiedEntryException($entry);
         }
 
+        // Create invitation via laravel-invite-only
+        $invitable = $this->resolveInvitable($entry);
+        $metadata = $this->resolveInvitationMetadata($entry);
+
+        $invitation = InviteOnly::invite($entry->email, $invitable, $metadata);
+
+        $entry->update(['invitation_id' => $invitation->id]);
         $entry->markAsInvited();
 
-        if (config('waitlist.auto_send_invitation', true)) {
+        // Optionally send additional waitlist notification (disabled by default)
+        if (config('waitlist.auto_send_invitation', false)) {
             $notificationClass = config('waitlist.notification');
             $entry->notify(new $notificationClass($entry));
         }
@@ -239,5 +249,39 @@ final class WaitlistService
         }
 
         return WaitlistEntry::findOrFail($entry);
+    }
+
+    private function resolveInvitable(WaitlistEntry $entry): ?Model
+    {
+        /** @var callable|null $resolver */
+        $resolver = config('waitlist.invitable.resolver');
+
+        if ($resolver !== null) {
+            return $resolver($entry);
+        }
+
+        /** @var class-string<Model>|null $modelClass */
+        $modelClass = config('waitlist.invitable.model');
+
+        if ($modelClass !== null) {
+            return $modelClass::first();
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function resolveInvitationMetadata(WaitlistEntry $entry): array
+    {
+        /** @var callable|null $mapper */
+        $mapper = config('waitlist.invitable.metadata_mapper');
+
+        if ($mapper !== null) {
+            return $mapper($entry);
+        }
+
+        return [];
     }
 }

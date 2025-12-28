@@ -42,10 +42,11 @@ return [
     |--------------------------------------------------------------------------
     |
     | When set to true, the package will automatically send an invitation
-    | notification when a waitlist entry is marked as invited.
+    | notification when a waitlist entry is marked as invited. This is
+    | disabled by default since laravel-invite-only handles notifications.
     |
     */
-    'auto_send_invitation' => true,
+    'auto_send_invitation' => false,
 
     /*
     |--------------------------------------------------------------------------
@@ -86,5 +87,38 @@ return [
         'enabled' => true,
         'prefix' => 'waitlist',
         'middleware' => ['web'],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Invitable Configuration
+    |--------------------------------------------------------------------------
+    |
+    | Configure how invitations are created via laravel-invite-only when
+    | a waitlist entry is invited. The invitable model is the entity that
+    | users are being invited to (e.g., Team, Organization, Application).
+    |
+    */
+    'invitable' => [
+        /*
+        | The model class to use as the invitable. When set, all invitations
+        | will be associated with this model type.
+        | Example: \App\Models\Team::class
+        */
+        'model' => null,
+
+        /*
+        | A closure to resolve the specific invitable instance for each entry.
+        | Receives the WaitlistEntry and should return a Model instance or null.
+        | Example: fn(WaitlistEntry $entry) => Team::find($entry->metadata['team_id'])
+        */
+        'resolver' => null,
+
+        /*
+        | A closure to map entry data to invitation metadata.
+        | Receives the WaitlistEntry and should return an array of metadata.
+        | Example: fn(WaitlistEntry $entry) => ['role' => 'member']
+        */
+        'metadata_mapper' => null,
     ],
 ];
