@@ -26,8 +26,8 @@ implement your own controllers, views, and API endpoints.
 
 ## Requirements
 
-- PHP 8.4+
-- Laravel 11.0+
+- PHP 8.3+
+- Laravel 11/12/13
 
 ## Installation
 
