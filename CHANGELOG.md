@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.1.0](https://github.com/offload-project/laravel-waitlist/compare/v3.0.0...v3.1.0) (2026-03-31)
+
+
+### Features
+
+* add laravel 13 support ([6b9aefa](https://github.com/offload-project/laravel-waitlist/commit/6b9aefabc5bb2482ecc508ac6a156b03021a1018))
+
 ## [3.0.0](https://github.com/offload-project/laravel-waitlist/compare/v2.1.0...v3.0.0) (2025-12-28)
 
 
