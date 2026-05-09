@@ -104,7 +104,9 @@ final class WaitlistService
             $this->resolveInvitationMetadata($entry),
             $options,
         );
-        $inviteOptions['invited_by'] ??= auth()->user();
+        if (! array_key_exists('invited_by', $inviteOptions)) {
+            $inviteOptions['invited_by'] = auth()->user();
+        }
 
         $invitation = InviteOnly::invite($entry->email, $invitable, $inviteOptions);
 
