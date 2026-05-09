@@ -125,6 +125,17 @@ Waitlist::invite($entryId);      // By ID
 Waitlist::reject($entry);
 Waitlist::reject($entryId);
 
+// Pass options through to the underlying invitation
+// $entry is a WaitlistEntry, e.g. from Waitlist::getByEmail() or getPending()
+$entry = Waitlist::for('beta')->getByEmail('john@example.com');
+
+Waitlist::invite($entry, [
+    'invited_by' => $admin,        // Model or int; falls back to auth()->user()
+    'role' => 'beta-tester',
+    'metadata' => ['cohort' => 'wave-3'],
+    'expires_at' => now()->addDays(14),
+]);
+
 // Query entries
 $pending = Waitlist::for('beta')->getPending();
 $invited = Waitlist::for('beta')->getInvited();
@@ -513,7 +524,7 @@ Waitlist::getDefault(): Waitlist
 Waitlist::add(string $name, string $email, array $metadata = []): WaitlistEntry
 
 // Managing status
-Waitlist::invite(int|WaitlistEntry $entry): WaitlistEntry
+Waitlist::invite(int|WaitlistEntry $entry, array $options = []): WaitlistEntry
 Waitlist::reject(int|WaitlistEntry $entry): WaitlistEntry
 
 // Email verification
