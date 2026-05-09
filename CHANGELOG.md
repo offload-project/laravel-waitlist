@@ -1,5 +1,13 @@
 # Changelog
 
+## v3.1.1 - 2026-05-09
+
+### Fixed
+- Support invited by in waitlist invite [#17](https://github.com/offload-project/laravel-waitlist/pull/17)
+
+### Changed
+- Repo updates [#16](https://github.com/offload-project/laravel-waitlist/pull/16)
+
 ## [3.1.0](https://github.com/offload-project/laravel-waitlist/compare/v3.0.0...v3.1.0) (2026-03-31)
 
 
