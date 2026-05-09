@@ -86,9 +86,11 @@ final class WaitlistService
     }
 
     /**
+     * @param  array{role?: string, metadata?: array<string, mixed>, expires_at?: \Illuminate\Support\Carbon, invited_by?: Model|int}  $options
+     *
      * @throws UnverifiedEntryException
      */
-    public function invite(int|WaitlistEntry $entry): WaitlistEntry
+    public function invite(int|WaitlistEntry $entry, array $options = []): WaitlistEntry
     {
         $entry = $this->resolveEntry($entry);
 
@@ -98,9 +100,13 @@ final class WaitlistService
 
         // Create invitation via laravel-invite-only
         $invitable = $this->resolveInvitable($entry);
-        $metadata = $this->resolveInvitationMetadata($entry);
+        $inviteOptions = array_merge(
+            $this->resolveInvitationMetadata($entry),
+            $options,
+        );
+        $inviteOptions['invited_by'] ??= auth()->user();
 
-        $invitation = InviteOnly::invite($entry->email, $invitable, $metadata);
+        $invitation = InviteOnly::invite($entry->email, $invitable, $inviteOptions);
 
         $entry->update(['invitation_id' => $invitation->id]);
         $entry->markAsInvited();

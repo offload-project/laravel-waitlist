@@ -136,6 +136,48 @@ test('can invite user by id', function () {
         ->and($entry->invitation_id)->not->toBeNull();
 });
 
+test('passes invited_by from options through to invitation', function () {
+    Notification::fake();
+
+    $entry = Waitlist::add('John Doe', 'john@example.com');
+    Waitlist::invite($entry, ['invited_by' => 42]);
+
+    $entry->refresh();
+
+    expect($entry->invitation->invited_by)->toBe(42);
+});
+
+test('falls back to authenticated user as invited_by', function () {
+    Notification::fake();
+
+    $inviter = new class extends Illuminate\Foundation\Auth\User
+    {
+        public function getKey(): int
+        {
+            return 7;
+        }
+    };
+    auth()->setUser($inviter);
+
+    $entry = Waitlist::add('John Doe', 'john@example.com');
+    Waitlist::invite($entry);
+
+    $entry->refresh();
+
+    expect($entry->invitation->invited_by)->toBe(7);
+});
+
+test('invited_by is null when no user is authenticated and none provided', function () {
+    Notification::fake();
+
+    $entry = Waitlist::add('John Doe', 'john@example.com');
+    Waitlist::invite($entry);
+
+    $entry->refresh();
+
+    expect($entry->invitation->invited_by)->toBeNull();
+});
+
 test('can reject user from waitlist', function () {
     $entry = Waitlist::add('John Doe', 'john@example.com');
     Waitlist::reject($entry);
