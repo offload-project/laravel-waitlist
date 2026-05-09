@@ -178,6 +178,26 @@ test('invited_by is null when no user is authenticated and none provided', funct
     expect($entry->invitation->invited_by)->toBeNull();
 });
 
+test('explicit invited_by null is respected even when a user is authenticated', function () {
+    Notification::fake();
+
+    $authed = new class extends Illuminate\Foundation\Auth\User
+    {
+        public function getKey(): int
+        {
+            return 99;
+        }
+    };
+    auth()->setUser($authed);
+
+    $entry = Waitlist::add('John Doe', 'john@example.com');
+    Waitlist::invite($entry, ['invited_by' => null]);
+
+    $entry->refresh();
+
+    expect($entry->invitation->invited_by)->toBeNull();
+});
+
 test('can reject user from waitlist', function () {
     $entry = Waitlist::add('John Doe', 'john@example.com');
     Waitlist::reject($entry);
