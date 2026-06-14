@@ -20,6 +20,7 @@ use Illuminate\Support\Carbon;
  */
 final class Waitlist extends Model
 {
+    /** @var list<string> */
     protected $fillable = [
         'name',
         'slug',
@@ -28,6 +29,7 @@ final class Waitlist extends Model
         'settings',
     ];
 
+    /** @var array<string, string> */
     protected $casts = [
         'is_active' => 'boolean',
         'settings' => 'array',
