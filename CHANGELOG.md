@@ -1,5 +1,10 @@
 # Changelog
 
+## v3.2.0 - 2026-06-14
+
+### Other
+- Docs/updates 614 [#19](https://github.com/offload-project/laravel-waitlist/pull/19)
+
 ## v3.1.1 - 2026-05-09
 
 ### Fixed
