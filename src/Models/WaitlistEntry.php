@@ -28,6 +28,7 @@ final class WaitlistEntry extends Model
 {
     use Notifiable;
 
+    /** @var list<string> */
     protected $fillable = [
         'waitlist_id',
         'name',
@@ -40,6 +41,7 @@ final class WaitlistEntry extends Model
         'invitation_id',
     ];
 
+    /** @var array<string, string> */
     protected $casts = [
         'metadata' => 'array',
         'invited_at' => 'datetime',
