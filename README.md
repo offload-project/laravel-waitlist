@@ -6,7 +6,7 @@
 
 # Laravel Waitlist
 
-A simple and flexible waitlist package for Laravel applications. Manage multiple waitlists with ease - perfect for beta
+A simple and flexible waitlist package for Laravel applications. Manage multiple waitlists with ease — perfect for beta
 programs, product launches, feature access, and more.
 
 This package provides the core functionality without imposing any UI or API structure, giving you complete freedom to
@@ -14,15 +14,36 @@ implement your own controllers, views, and API endpoints.
 
 ## Features
 
-- **Multiple Waitlists** - Create and manage as many waitlists as you need
-- **Simple API** - Clean, intuitive interface for managing waitlist entries
-- **Status Management** - Track entries as pending, invited, or rejected
-- **Email Verification** - Optional email verification before inviting users
-- **Email Notifications** - Automatic notifications when users are invited
-- **Metadata Support** - Store custom data with each entry
-- **Fully Tested** - 44 comprehensive tests, 80 assertions
-- **Type Safe** - Full PHPStan level 5 compliance
-- **Flexible** - No opinionated routes or views - use it your way
+- **Multiple waitlists** — Create and manage as many waitlists as you need
+- **Simple facade API** — Clean, intuitive interface for managing waitlist entries
+- **Status tracking** — Pending, invited, and rejected states
+- **Email verification** — Optional opt-in verification before inviting users
+- **Event-driven notifications** — Automatic invite + verification notifications, fully customizable
+- **Metadata support** — Store custom data with each entry
+- **Invite-only integration** — Optional bridge into `offload-project/laravel-invite-only` for token-based flows
+- **Type-safe** — Full PHPStan compliance
+
+## Table of Contents
+
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+    - [Single Waitlist](#single-waitlist)
+    - [Multiple Waitlists](#multiple-waitlists)
+- [Usage](#usage)
+    - [Full API](#full-api)
+    - [Working With the Model](#working-with-the-model)
+    - [Custom Controller / Livewire](#custom-controller--livewire)
+    - [Custom Notifications](#custom-notifications)
+    - [Email Verification](#email-verification)
+- [Configuration](#configuration)
+- [Database Schema](#database-schema)
+- [API Reference](#api-reference)
+- [AI Coding Assistant Skill](#ai-coding-assistant-skill)
+- [Testing](#testing)
+- [Contributing](#contributing)
+- [Security](#security)
+- [License](#license)
 
 ## Requirements
 
@@ -31,30 +52,19 @@ implement your own controllers, views, and API endpoints.
 
 ## Installation
 
-Install the package via Composer:
-
 ```bash
 composer require offload-project/laravel-waitlist
-```
 
-Publish and run the migrations:
-
-```bash
+php artisan vendor:publish --tag="waitlist-config"
 php artisan vendor:publish --tag="waitlist-migrations"
 php artisan migrate
 ```
 
-Optionally, publish the config file:
+## Quick Start
 
-```bash
-php artisan vendor:publish --tag="waitlist-config"
-```
+### Single Waitlist
 
-## Usage
-
-### Quick Start (Single Waitlist)
-
-If you only need one waitlist, just start using it - a default waitlist is created automatically:
+If you only need one waitlist, just start using it — a default waitlist is created automatically:
 
 ```php
 use OffloadProject\Waitlist\Facades\Waitlist;
@@ -100,7 +110,9 @@ $entry = Waitlist::for('beta')->getByEmail('john@example.com');
 Waitlist::invite($entry);
 ```
 
-### Complete API
+## Usage
+
+### Full API
 
 ```php
 use OffloadProject\Waitlist\Facades\Waitlist;
@@ -126,7 +138,6 @@ Waitlist::reject($entry);
 Waitlist::reject($entryId);
 
 // Pass options through to the underlying invitation
-// $entry is a WaitlistEntry, e.g. from Waitlist::getByEmail() or getPending()
 $entry = Waitlist::for('beta')->getByEmail('john@example.com');
 
 Waitlist::invite($entry, [
@@ -158,7 +169,7 @@ $beta->deactivate();
 $beta->isActive(); // true/false
 ```
 
-### Using the Model
+### Working With the Model
 
 You can also work directly with the `WaitlistEntry` model:
 
@@ -194,7 +205,7 @@ $pending = WaitlistEntry::where('status', 'pending')->get();
 $recent = WaitlistEntry::latest()->take(10)->get();
 ```
 
-### Creating Your Own Controller
+### Custom Controller / Livewire
 
 Since this package doesn't include controllers, you can create your own to fit your needs:
 
@@ -235,9 +246,7 @@ class WaitlistController extends Controller
 }
 ```
 
-### Creating Your Own Livewire Component
-
-Example Livewire component for a waitlist form:
+Example Livewire component:
 
 ```php
 namespace App\Livewire;
@@ -271,7 +280,7 @@ class WaitlistForm extends Component
 }
 ```
 
-### Customizing the Notification
+### Custom Notifications
 
 Publish the config file and change the notification class:
 
@@ -310,42 +319,18 @@ class CustomWaitlistInvited extends Notification
 }
 ```
 
-### Disabling Auto-Notifications
-
-If you want to send invitations manually:
+To send invitations manually instead of automatically, disable auto-send:
 
 ```php
 // config/waitlist.php
 'auto_send_invitation' => false,
 ```
 
-Then send notifications manually:
-
 ```php
 use OffloadProject\Waitlist\Notifications\WaitlistInvited;
 
 $entry = Waitlist::getByEmail('john@example.com');
 $entry->notify(new WaitlistInvited($entry));
-```
-
-### Using Metadata
-
-Store custom data with waitlist entries:
-
-```php
-Waitlist::add('John Doe', 'john@example.com', [
-    'referral_source' => 'Product Hunt',
-    'plan_interest' => 'Enterprise',
-    'company_size' => '50-100',
-    'use_case' => 'Marketing automation',
-]);
-
-// Access metadata
-$entry = Waitlist::getByEmail('john@example.com');
-$source = $entry->metadata['referral_source'];
-
-// Query by metadata
-$enterpriseInterest = WaitlistEntry::whereJsonContains('metadata->plan_interest', 'Enterprise')->get();
 ```
 
 ### Email Verification
@@ -405,9 +390,7 @@ The package provides a verification route at `/waitlist/verify/{token}` by defau
 ],
 ```
 
-#### Custom Verification Notification
-
-Create your own verification notification:
+To customize the verification notification:
 
 ```php
 // config/waitlist.php
@@ -483,28 +466,29 @@ return [
 
 ### `waitlists` table
 
-- `id` - Primary key
-- `name` - Waitlist name
-- `slug` - Unique identifier for referencing the waitlist
-- `description` - Optional description
-- `is_active` - Whether the waitlist is active (default: true)
-- `settings` - JSON field for custom settings
-- `created_at` and `updated_at` - Laravel timestamps
+- `id` — Primary key
+- `name` — Waitlist name
+- `slug` — Unique identifier for referencing the waitlist
+- `description` — Optional description
+- `is_active` — Whether the waitlist is active (default: `true`)
+- `settings` — JSON field for custom settings
+- `created_at` / `updated_at` — Laravel timestamps
 
 Indexed fields: `slug`, `is_active`
 
 ### `waitlist_entries` table
 
-- `id` - Primary key
-- `waitlist_id` - Foreign key to the waitlist (nullable for default waitlist)
-- `name` - User's name
-- `email` - User's email (unique per waitlist)
-- `status` - Status: pending, invited, or rejected
-- `invited_at` - Timestamp when invited
-- `metadata` - JSON field for custom data
-- `verification_token` - Token for email verification (nullable)
-- `verified_at` - Timestamp when email was verified (nullable)
-- `created_at` and `updated_at` - Laravel timestamps
+- `id` — Primary key
+- `waitlist_id` — Foreign key to the waitlist (nullable for default waitlist)
+- `name` — User's name
+- `email` — User's email (unique per waitlist)
+- `status` — Status: `pending`, `invited`, or `rejected`
+- `invited_at` — Timestamp when invited
+- `metadata` — JSON field for custom data
+- `verification_token` — Token for email verification (nullable)
+- `verified_at` — Timestamp when email was verified (nullable)
+- `invitation_id` — Optional FK to `offload-project/laravel-invite-only` invitation (nullable)
+- `created_at` / `updated_at` — Laravel timestamps
 
 Indexed fields: `status`, `created_at`, `verification_token`
 Unique constraint: `['waitlist_id', 'email']` (same email can join multiple waitlists)
@@ -579,80 +563,33 @@ $entry->markAsVerified(): self
 $entry->generateVerificationToken(): self
 ```
 
+## AI Coding Assistant Skill
+
+This package ships a [Laravel Boost](https://skills.laravel.cloud/) skill so coding assistants (Claude Code, Cursor, etc.) follow the package's conventions when generating code. Install it in your app with:
+
+```bash
+php artisan boost:add-skill offload-project/laravel-waitlist
+```
+
+The skill source lives at [`skills/SKILL.md`](skills/SKILL.md).
+
 ## Testing
 
 ```bash
 composer test
 ```
 
-## Code Quality
+## Contributing
 
-```bash
-# Run code style fixer
-composer pint
+Contributions are welcome! Please see the documents below before getting started.
 
-# Run static analysis
-composer analyse
-```
+- [Contributing Guide](CONTRIBUTING.md) — setup, workflow, commit conventions, and PR process
+- [Code of Conduct](CODE_OF_CONDUCT.md) — expectations for participation in this project
 
-## Example Use Cases
+## Security
 
-### Multiple Product Launches
-
-```php
-// Different waitlists for different products
-Waitlist::create('Product A', 'product-a');
-Waitlist::create('Product B', 'product-b');
-
-Waitlist::for('product-a')->add($name, $email);
-Waitlist::for('product-b')->add($name, $email);
-```
-
-### Tiered Access Programs
-
-```php
-// Different tiers of access
-Waitlist::create('Free Tier', 'free');
-Waitlist::create('Pro Tier', 'pro');
-Waitlist::create('Enterprise', 'enterprise');
-
-// Users can be on multiple tiers
-Waitlist::for('free')->add($name, $email);
-Waitlist::for('pro')->add($name, $email);
-```
-
-### Feature-Specific Waitlists
-
-```php
-// Individual features
-Waitlist::create('AI Assistant', 'ai-assistant');
-Waitlist::create('Advanced Analytics', 'analytics');
-Waitlist::create('API Access', 'api');
-
-// Track interest per feature
-Waitlist::for('ai-assistant')->add($name, $email);
-```
-
-### Regional Launches
-
-```php
-// Different regions
-Waitlist::create('North America', 'na');
-Waitlist::create('Europe', 'eu');
-Waitlist::create('Asia Pacific', 'apac');
-
-Waitlist::for('na')->add($name, $email);
-```
-
-### Beta Programs
-
-```php
-// Different beta phases
-Waitlist::create('Alpha Testers', 'alpha');
-Waitlist::create('Beta Testers', 'beta');
-Waitlist::create('Early Access', 'early-access');
-```
+- [Security Policy](SECURITY.md) — how to report a vulnerability privately
 
 ## License
 
-The MIT License (MIT). Please see [License File](LICENSE) for more information.
+The MIT License (MIT). Please see [License File](LICENSE.md) for more information.
