@@ -1,10 +1,10 @@
-<p align="center">
-    <a href="https://packagist.org/packages/offload-project/laravel-waitlist"><img src="https://img.shields.io/packagist/v/offload-project/laravel-waitlist.svg?style=flat-square" alt="Latest Version on Packagist"></a>
-    <a href="https://github.com/offload-project/laravel-waitlist/actions"><img src="https://img.shields.io/github/actions/workflow/status/offload-project/laravel-waitlist/tests.yml?branch=main&style=flat-square" alt="GitHub Tests Action Status"></a>
-    <a href="https://packagist.org/packages/offload-project/laravel-waitlist"><img src="https://img.shields.io/packagist/dt/offload-project/laravel-waitlist.svg?style=flat-square" alt="Total Downloads"></a>
-</p>
-
 # Laravel Waitlist
+
+[![Latest Version on Packagist](https://img.shields.io/packagist/v/offload-project/laravel-waitlist.svg?style=flat-square)](https://packagist.org/packages/offload-project/laravel-waitlist)
+[![Tests](https://img.shields.io/github/actions/workflow/status/offload-project/laravel-waitlist/tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/offload-project/laravel-waitlist/actions/workflows/tests.yml)
+[![Build](https://img.shields.io/github/actions/workflow/status/offload-project/laravel-waitlist/release.yml?label=build&style=flat-square)](https://github.com/offload-project/laravel-waitlist/actions/workflows/release.yml)
+[![Total Downloads](https://img.shields.io/packagist/dt/offload-project/laravel-waitlist.svg?style=flat-square)](https://packagist.org/packages/offload-project/laravel-waitlist)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg?style=flat-square)](LICENSE.md)
 
 A simple and flexible waitlist package for Laravel applications. Manage multiple waitlists with ease — perfect for beta
 programs, product launches, feature access, and more.
@@ -565,7 +565,8 @@ $entry->generateVerificationToken(): self
 
 ## AI Coding Assistant Skill
 
-This package ships a [Laravel Boost](https://skills.laravel.cloud/) skill so coding assistants (Claude Code, Cursor, etc.) follow the package's conventions when generating code. Install it in your app with:
+This package ships a [Laravel Boost](https://skills.laravel.cloud/) skill so coding assistants (Claude Code, Cursor,
+etc.) follow the package's conventions when generating code. Install it in your app with:
 
 ```bash
 php artisan boost:add-skill offload-project/laravel-waitlist
