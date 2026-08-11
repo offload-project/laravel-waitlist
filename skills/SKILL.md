@@ -1,6 +1,6 @@
 ---
 name: Laravel Waitlist
-description: Conventions and APIs for the offload-project/laravel-waitlist package — multiple waitlists, entry status tracking, optional email verification, and bridge into laravel-invite-only.
+description: Conventions and APIs for the offload-project/laravel-waitlist package — multiple waitlists, entry status tracking, optional email verification, lifecycle events, mailing list sync (Mailchimp/Kit), and bridge into laravel-invite-only.
 compatible_agents:
   - Claude Code
   - Cursor
@@ -11,6 +11,8 @@ tags:
   - eloquent
   - notifications
   - invitations
+  - mailing-list
+  - mailchimp
 ---
 
 ## Context
@@ -22,9 +24,11 @@ tags:
 - Optional email verification flow with a published `/waitlist/verify/{token}` route.
 - Optional bridge into `offload-project/laravel-invite-only`: calling `Waitlist::invite()` creates a real `Invitation` (token, expiration, events) and persists the FK on `WaitlistEntry::$invitation_id`.
 - Two notifications: `WaitlistInvited` (opt-in via `auto_send_invitation`) and `VerifyWaitlistEmail`.
-- A typed `UnverifiedEntryException` thrown when invite is attempted on an unverified entry while verification gating is on.
+- Lifecycle events in `OffloadProject\Waitlist\Events`: `WaitlistCreated`, `WaitlistEntryAdded`, `WaitlistEntryVerified`, `WaitlistEntryInvited`, `WaitlistEntryRejected`, plus `WaitlistEntrySubscribed`, `WaitlistEntryUnsubscribed`, and `MailingListSyncFailed`.
+- A mailing list integration (`MailingList` facade, `MailingListManager`) that syncs entries to Mailchimp or Kit (ConvertKit) in a queued job, with `log` and `array` drivers and an `extend()` hook for others.
+- Typed exceptions: `UnverifiedEntryException` (invite attempted on an unverified entry while verification gating is on) and `MailingListException` (driver/credential/list-id/API failures).
 
-Apply this skill when working in a Laravel app that has `offload-project/laravel-waitlist` in `composer.json`, or when the user asks for help with `Waitlist`, `WaitlistEntry`, the `Waitlist` facade, or waitlist flows in this package.
+Apply this skill when working in a Laravel app that has `offload-project/laravel-waitlist` in `composer.json`, or when the user asks for help with `Waitlist`, `WaitlistEntry`, the `Waitlist` or `MailingList` facades, or waitlist flows in this package.
 
 ## Rules
 
@@ -68,11 +72,26 @@ Apply this skill when working in a Laravel app that has `offload-project/laravel
     - `invitable.metadata_mapper` — closure `fn(WaitlistEntry $entry) => array` to translate entry metadata into invitation metadata (e.g. `['role' => 'beta-tester']`).
 19. Don't hard-code an invitable per call site. If different flows need different invitables, use the `resolver` closure with a discriminator in `metadata`.
 
+### Events
+
+20. Hook into the lifecycle with the package's own events rather than wrapping the facade or polling the table. They live in `OffloadProject\Waitlist\Events` and each carries the model as a readonly property (`$event->entry`, `$event->waitlist`).
+21. The lifecycle events fire from the models (`WaitlistEntryAdded` via `$dispatchesEvents` on create; the rest from `markAsInvited()` / `markAsRejected()` / `markAsVerified()`), so listeners still run for code that bypasses the facade.
+22. Use `Event::fake([SpecificEvent::class])` in tests, not a bare `Event::fake()` — a blanket fake also swallows `WaitlistEntryAdded`, which stops the mailing list listener from ever running.
+
+### Mailing list sync
+
+23. Turn it on with `waitlist.mailing_list.enabled` and pick a driver (`mailchimp`, `kit`, `log`, `array`). Connect a waitlist to a list with `Waitlist::for($slug)->connectMailingList($listId, $driver = null)` — the list id is a Mailchimp audience id, or a Kit form id (or tag id when `list_type` is `tag`). Waitlists with no list of their own fall back to the driver's configured `list_id`.
+24. Don't build your own "subscribe on sign up" listener. Subscribing is automatic and follows the verification setting: with `waitlist.verification.enabled` off the entry syncs on `add()`, with it on the entry syncs after `Waitlist::verify()`. That ordering is deliberate — an unconfirmed address must never reach the newsletter.
+25. For anything beyond subscribing — tagging on invite, removing on reject, moving between lists — listen for the lifecycle events and call `MailingList::tagEntry($entry, [...])` or `Waitlist::unsubscribeFromMailingList($entry)`. Don't add those side effects inside the host app's controllers.
+26. Syncing runs through queued jobs (`SyncEntryToMailingList`, `UnsubscribeEntryFromMailingList`). Keep `mailing_list.queue.enabled` on in production so sign ups never block on the provider's API. Backfill existing rows with `php artisan waitlist:sync-mailing-list [slug] [--all] [--force]` or `Waitlist::for($slug)->syncMailingList()`.
+27. Add a service the package doesn't ship by implementing `OffloadProject\Waitlist\Contracts\MailingListDriver` and registering it with `MailingList::extend('name', fn (array $config) => new YourDriver(...))` from a service provider. Don't fork the shipped drivers.
+28. In tests use `MailingList::fake()`, which swaps in the in-memory `ArrayDriver`, runs syncs inline, and exposes `hasSubscriber()`, `subscribers()`, and `tagsFor()`. Reach for `Http::fake()` only when asserting the exact request a real driver sends.
+
 ### Don'ts
 
-20. Don't run lifecycle changes via direct `update()` calls (`$entry->update(['status' => 'invited'])`). Use `markAsInvited()` / `markAsRejected()` / `markAsVerified()` so casts and side effects (timestamps, token clearing) stay consistent. Better still: drive everything through the facade.
-21. Don't edit the published migrations to add columns — write a follow-up migration in the host app. The package may add columns in future releases and will assume the published schema.
-22. Don't subclass `Waitlist` or `WaitlistEntry`; both are `final`. Add behavior on the host-app side via event listeners on the underlying `laravel-invite-only` events, or by extending the service via a custom binding in your app's container.
+29. Don't run lifecycle changes via direct `update()` calls (`$entry->update(['status' => 'invited'])`). Use `markAsInvited()` / `markAsRejected()` / `markAsVerified()` so casts, side effects (timestamps, token clearing), and events stay consistent. Better still: drive everything through the facade.
+30. Don't edit the published migrations to add columns — write a follow-up migration in the host app. The package may add columns in future releases and will assume the published schema.
+31. Don't subclass `Waitlist` or `WaitlistEntry`; both are `final`. Add behavior on the host-app side via listeners on the package's events, or by extending the service via a custom binding in your app's container.
 
 ## Examples
 
@@ -188,6 +207,55 @@ class CustomVerifyWaitlistEmail extends Notification
 ],
 ```
 
+### Syncing sign-ups to Mailchimp
+
+```php
+// config/waitlist.php
+'mailing_list' => [
+    'enabled' => true,
+    'default' => 'mailchimp',
+    'drivers' => [
+        'mailchimp' => [
+            'key' => env('MAILCHIMP_API_KEY'),   // suffix carries the data centre, e.g. -us14
+            'list_id' => env('MAILCHIMP_LIST_ID'),
+        ],
+    ],
+],
+```
+
+```php
+// One audience per waitlist (optional — otherwise the config list_id is used).
+Waitlist::for('beta')->connectMailingList('a1b2c3d4e5');
+
+// Subscribed automatically, on add or on verification depending on the config.
+Waitlist::for('beta')->add('Jane Smith', 'jane@example.com');
+```
+
+### Reacting to the lifecycle
+
+```php
+use Illuminate\Support\Facades\Event;
+use OffloadProject\Waitlist\Events\WaitlistEntryInvited;
+use OffloadProject\Waitlist\Events\WaitlistEntryRejected;
+use OffloadProject\Waitlist\Facades\MailingList;
+use OffloadProject\Waitlist\Facades\Waitlist;
+
+Event::listen(fn (WaitlistEntryInvited $event) => MailingList::tagEntry($event->entry, ['invited']));
+Event::listen(fn (WaitlistEntryRejected $event) => Waitlist::unsubscribeFromMailingList($event->entry));
+```
+
+### Testing a mailing list flow
+
+```php
+use OffloadProject\Waitlist\Facades\MailingList;
+
+$mailingList = MailingList::fake();
+
+Waitlist::add('John Doe', 'john@example.com');
+
+expect($mailingList->hasSubscriber('john@example.com'))->toBeTrue();
+```
+
 ### Disabling package routes (own controller)
 
 ```php
@@ -211,7 +279,11 @@ Route::get('/welcome/{token}', function (string $token) {
 - ❌ `$entry->update(['status' => 'invited'])` instead of `Waitlist::invite($entry)`. The direct update skips the `laravel-invite-only` invitation, the token, the notification, and the FK linkage.
 - ❌ Catching `\Throwable` or `\Exception` around `Waitlist::invite()`. Catch `UnverifiedEntryException` (and the invite-only typed exceptions) so each failure mode produces a tailored response.
 - ❌ Toggling `waitlist.auto_send_invitation` to `true` without also customizing `waitlist.notification`. By default both `WaitlistInvited` and the invite-only invitation notification will fire — two emails per invite.
-- ❌ Subclassing `Waitlist` or `WaitlistEntry`. Both are `final`; extend behavior via events on `laravel-invite-only` or a custom service binding.
+- ❌ Subclassing `Waitlist` or `WaitlistEntry`. Both are `final`; extend behavior via the package's events or a custom service binding.
+- ❌ Calling a mailing list API from a controller after `Waitlist::add(...)`. Subscribing is already automatic — a manual call double-subscribes and skips the queue.
+- ❌ Subscribing unverified entries when verification is on (e.g. by listening for `WaitlistEntryAdded` yourself). Listen for `WaitlistEntryVerified` instead, or just let the package do it.
+- ❌ Writing a mailing list `list_id` into `waitlist_entries.metadata`. Lists belong to the waitlist — store them with `connectMailingList()`, which lives in the `waitlists.settings` column.
+- ❌ Putting a closure in `mailing_list.attributes` and then running `php artisan config:cache`. Config files containing closures cannot be cached.
 - ❌ Hard-coding `'invited_by' => auth()->user()` at every call site. Omit it and let `WaitlistService` fall back to `auth()->user()` automatically. Pass it explicitly only when you need a different actor (admin acting on behalf, console command, etc.).
 - ❌ Editing files inside `vendor/offload-project/laravel-waitlist`. All extension points are exposed via `config/waitlist.php`.
 - ❌ Sharing one email between waitlists via a single global `email` unique constraint. The package already supports a person on multiple waitlists — the constraint is `['waitlist_id', 'email']`. Don't add app-level deduplication that fights this.
