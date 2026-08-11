@@ -91,6 +91,96 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Mailing List Integration
+    |--------------------------------------------------------------------------
+    |
+    | Push waitlist entries to a newsletter service such as Mailchimp or Kit.
+    | Connect a waitlist to a list with:
+    |
+    |     Waitlist::for('beta')->connectMailingList('audience-id');
+    |
+    | Entries are subscribed automatically: on sign up, or — when email
+    | verification is enabled — once the address has been verified.
+    |
+    */
+    'mailing_list' => [
+        'enabled' => env('WAITLIST_MAILING_LIST_ENABLED', false),
+
+        /*
+        | The driver used by waitlists that have not picked one themselves.
+        | Ships with: mailchimp, kit, log, array.
+        */
+        'default' => env('WAITLIST_MAILING_LIST_DRIVER', 'log'),
+
+        /*
+        | Subscribe entries automatically. Turn this off to sync by hand with
+        | Waitlist::subscribeToMailingList($entry) or by listening for events.
+        */
+        'auto_subscribe' => true,
+
+        /*
+        | Send new contacts a confirmation email before subscribing them.
+        | Mailchimp only — Kit uses the opt-in setting of the form itself.
+        */
+        'double_optin' => env('WAITLIST_MAILING_LIST_DOUBLE_OPTIN', false),
+
+        /*
+        | Tags applied to every subscriber the package creates.
+        */
+        'tags' => [],
+
+        /*
+        | A closure mapping an entry to provider fields (Mailchimp merge
+        | fields, Kit custom fields). Note that a config file containing a
+        | closure cannot be cached with `php artisan config:cache`.
+        | Example: fn(WaitlistEntry $entry) => ['SOURCE' => $entry->metadata['source'] ?? null]
+        */
+        'attributes' => null,
+
+        /*
+        | Syncing happens in a queued job so sign ups never wait on the API.
+        */
+        'queue' => [
+            'enabled' => true,
+            'connection' => env('WAITLIST_MAILING_LIST_QUEUE_CONNECTION'),
+            'queue' => env('WAITLIST_MAILING_LIST_QUEUE'),
+        ],
+
+        /*
+        | HTTP timeout in seconds, and how many times a failed request is
+        | retried before the job itself is retried.
+        */
+        'timeout' => 10,
+        'retries' => 2,
+
+        'drivers' => [
+            'mailchimp' => [
+                'key' => env('MAILCHIMP_API_KEY'),
+                // Data centre prefix, e.g. "us14". Derived from the key when null.
+                'server' => env('MAILCHIMP_SERVER_PREFIX'),
+                // Fallback audience id for waitlists with no list of their own.
+                'list_id' => env('MAILCHIMP_LIST_ID'),
+            ],
+
+            'kit' => [
+                'key' => env('KIT_API_KEY'),
+                // Whether a list id refers to a Kit "form" or a "tag".
+                'list_type' => env('KIT_LIST_TYPE', 'form'),
+                'list_id' => env('KIT_FORM_ID'),
+            ],
+
+            'log' => [
+                'channel' => env('WAITLIST_MAILING_LIST_LOG_CHANNEL'),
+                'list_id' => 'log',
+            ],
+
+            // Used by MailingList::fake(), which sets its own list id.
+            'array' => [],
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Invitable Configuration
     |--------------------------------------------------------------------------
     |

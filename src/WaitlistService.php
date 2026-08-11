@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use OffloadProject\InviteOnly\Facades\InviteOnly;
 use OffloadProject\Waitlist\Exceptions\UnverifiedEntryException;
+use OffloadProject\Waitlist\Jobs\SyncEntryToMailingList;
+use OffloadProject\Waitlist\Jobs\UnsubscribeEntryFromMailingList;
 use OffloadProject\Waitlist\Models\Waitlist;
 use OffloadProject\Waitlist\Models\WaitlistEntry;
 
@@ -217,6 +219,73 @@ final class WaitlistService
         return $this->query()
             ->where('status', 'invited')
             ->count();
+    }
+
+    /**
+     * Point the current waitlist at a list, audience, or form on a mailing
+     * list service. Entries added to it sync there from then on.
+     */
+    public function connectMailingList(string $listId, ?string $driver = null): Waitlist
+    {
+        $waitlist = $this->currentWaitlist ?? $this->getDefault();
+
+        return $waitlist->connectMailingList($listId, $driver);
+    }
+
+    public function disconnectMailingList(): Waitlist
+    {
+        $waitlist = $this->currentWaitlist ?? $this->getDefault();
+
+        return $waitlist->disconnectMailingList();
+    }
+
+    public function subscribeToMailingList(int|WaitlistEntry $entry): WaitlistEntry
+    {
+        $entry = $this->resolveEntry($entry);
+
+        SyncEntryToMailingList::dispatchFor($entry);
+
+        return $entry;
+    }
+
+    public function unsubscribeFromMailingList(int|WaitlistEntry $entry): WaitlistEntry
+    {
+        $entry = $this->resolveEntry($entry);
+
+        UnsubscribeEntryFromMailingList::dispatchFor($entry);
+
+        return $entry;
+    }
+
+    /**
+     * Push entries of the current waitlist to its mailing list, skipping the
+     * ones already synced unless $force is passed.
+     *
+     * @return int The number of entries queued for syncing.
+     */
+    public function syncMailingList(bool $force = false): int
+    {
+        $query = $this->query();
+
+        if (! $force) {
+            $query->whereNull('mailing_list_synced_at');
+        }
+
+        // Unverified addresses have not opted in yet.
+        if (config('waitlist.verification.enabled', false)) {
+            $query->whereNotNull('verified_at');
+        }
+
+        $count = 0;
+
+        $query->chunkById(200, function (Collection $entries) use (&$count): void {
+            foreach ($entries as $entry) {
+                SyncEntryToMailingList::dispatchFor($entry);
+                $count++;
+            }
+        });
+
+        return $count;
     }
 
     private function requiresVerificationBeforeInvite(): bool

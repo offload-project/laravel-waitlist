@@ -10,6 +10,9 @@
     "notifications",
     "beta-access",
     "launch",
+    "mailchimp",
+    "convertkit",
+    "newsletter",
     "offload-project"
   ],
   "homepage": "https://github.com/offload-project/laravel-waitlist",

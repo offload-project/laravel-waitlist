@@ -19,6 +19,8 @@ implement your own controllers, views, and API endpoints.
 - **Status tracking** — Pending, invited, and rejected states
 - **Email verification** — Optional opt-in verification before inviting users
 - **Event-driven notifications** — Automatic invite + verification notifications, fully customizable
+- **Mailing list sync** — Push entries to Mailchimp or Kit (ConvertKit), or plug in a driver of your own
+- **Events** — Hook into every step of the lifecycle, from sign up to invite
 - **Metadata support** — Store custom data with each entry
 - **Invite-only integration** — Optional bridge into `offload-project/laravel-invite-only` for token-based flows
 - **Type-safe** — Full PHPStan compliance
@@ -36,6 +38,8 @@ implement your own controllers, views, and API endpoints.
     - [Custom Controller / Livewire](#custom-controller--livewire)
     - [Custom Notifications](#custom-notifications)
     - [Email Verification](#email-verification)
+    - [Mailing List Integration](#mailing-list-integration)
+    - [Events](#events)
 - [Configuration](#configuration)
 - [Database Schema](#database-schema)
 - [API Reference](#api-reference)
@@ -430,6 +434,141 @@ class CustomVerifyEmail extends Notification
 }
 ```
 
+### Mailing List Integration
+
+Sync entries into a newsletter service as they join. Mailchimp and Kit (ConvertKit) ship with the package, and you can
+register a driver for anything else.
+
+```dotenv
+WAITLIST_MAILING_LIST_ENABLED=true
+WAITLIST_MAILING_LIST_DRIVER=mailchimp
+
+MAILCHIMP_API_KEY=1234567890abcdef-us14
+```
+
+Then point a waitlist at a list — the id is whatever the provider calls it:
+
+```php
+use OffloadProject\Waitlist\Facades\Waitlist;
+
+Waitlist::for('beta')->connectMailingList('a1b2c3d4e5');          // a Mailchimp audience
+Waitlist::for('launch')->connectMailingList('7654321', 'kit');    // a Kit form, on a different driver
+```
+
+Each waitlist can sync into a different list, and into a different service. Waitlists that aren't connected fall back to
+the driver's `list_id` in the config, so a single-list setup needs no `connectMailingList()` call at all.
+
+From there, entries subscribe themselves — and the timing follows your verification setting:
+
+| `verification.enabled` | The entry is subscribed             |
+|------------------------|-------------------------------------|
+| `false`                | as soon as they join the waitlist   |
+| `true`                 | once they have confirmed their email |
+
+That way an unconfirmed address never reaches your newsletter. Syncing runs in a queued job, so sign ups never wait on
+the provider's API.
+
+#### Drivers
+
+| Driver      | The list id is                                       | Notes                                                                     |
+|-------------|------------------------------------------------------|---------------------------------------------------------------------------|
+| `mailchimp` | an audience id                                       | Contacts are upserted, so an existing unsubscribe is never overridden       |
+| `kit`       | a form id, or a tag id with `list_type` set to `tag` | Kit unsubscribes are account-wide; double opt-in follows the form's setting |
+| `log`       | anything                                             | Writes what would have been sent to the log — handy for local work          |
+| `array`     | anything                                             | In-memory, used by `MailingList::fake()` in tests                           |
+
+#### Backfilling existing entries
+
+```bash
+php artisan waitlist:sync-mailing-list                # the default waitlist
+php artisan waitlist:sync-mailing-list beta           # one waitlist
+php artisan waitlist:sync-mailing-list --all          # every waitlist
+php artisan waitlist:sync-mailing-list --all --force  # include entries already synced
+```
+
+Or from code, which returns the number of entries queued:
+
+```php
+Waitlist::for('beta')->syncMailingList();
+```
+
+#### Syncing by hand
+
+Set `mailing_list.auto_subscribe` to `false` and drive it yourself:
+
+```php
+use OffloadProject\Waitlist\Facades\MailingList;
+
+Waitlist::subscribeToMailingList($entry);
+Waitlist::unsubscribeFromMailingList($entry);
+
+MailingList::tagEntry($entry, ['beta-cohort']);
+```
+
+#### Custom fields
+
+Map entry data onto Mailchimp merge fields or Kit custom fields:
+
+```php
+// config/waitlist.php
+'attributes' => fn (WaitlistEntry $entry) => [
+    'SOURCE' => $entry->metadata['referral_source'] ?? 'direct',
+],
+```
+
+Note that a config file holding a closure cannot be cached with `php artisan config:cache`.
+
+#### Adding a driver
+
+Implement `OffloadProject\Waitlist\Contracts\MailingListDriver` and register it from a service provider:
+
+```php
+MailingList::extend('brevo', fn (array $config) => new BrevoDriver($config['key']));
+```
+
+`$config` is whatever sits under `waitlist.mailing_list.drivers.brevo`.
+
+#### Testing
+
+`MailingList::fake()` swaps in the in-memory driver and runs syncs inline:
+
+```php
+$mailingList = MailingList::fake();
+
+Waitlist::add('John Doe', 'john@example.com');
+
+expect($mailingList->hasSubscriber('john@example.com'))->toBeTrue();
+```
+
+### Events
+
+Every step of the lifecycle fires an event, so you can hook in without wrapping the facade:
+
+| Event                       | Fired when                                          | Payload                        |
+|-----------------------------|-----------------------------------------------------|--------------------------------|
+| `WaitlistCreated`           | a waitlist is created                               | `$waitlist`                    |
+| `WaitlistEntryAdded`        | someone joins a waitlist                            | `$entry`                       |
+| `WaitlistEntryVerified`     | an entry confirms their email                       | `$entry`                       |
+| `WaitlistEntryInvited`      | an entry is invited                                 | `$entry`                       |
+| `WaitlistEntryRejected`     | an entry is rejected                                | `$entry`                       |
+| `WaitlistEntrySubscribed`   | an entry reaches the mailing list                   | `$entry`, `$subscriber`, `$driver` |
+| `WaitlistEntryUnsubscribed` | an entry is removed from the mailing list           | `$entry`, `$driver`            |
+| `MailingListSyncFailed`     | a sync could not be completed                       | `$entry`, `$driver`, `$exception` |
+
+They all live in `OffloadProject\Waitlist\Events`. Tagging people in your newsletter as they get invited, for example:
+
+```php
+use Illuminate\Support\Facades\Event;
+use OffloadProject\Waitlist\Events\WaitlistEntryInvited;
+use OffloadProject\Waitlist\Facades\MailingList;
+
+Event::listen(function (WaitlistEntryInvited $event) {
+    MailingList::tagEntry($event->entry, ['invited']);
+});
+```
+
+The lifecycle events fire from the model, so they also cover `$entry->markAsInvited()` and friends — not just the facade.
+
 ## Configuration
 
 ```php
@@ -458,6 +597,35 @@ return [
         'enabled' => true,  // Enable package routes
         'prefix' => 'waitlist',  // URL prefix
         'middleware' => ['web'],  // Middleware
+    ],
+
+    // Mailing list integration
+    'mailing_list' => [
+        'enabled' => false,  // Turn syncing on
+        'default' => 'log',  // mailchimp, kit, log, array — or your own
+        'auto_subscribe' => true,  // Subscribe entries automatically
+        'double_optin' => false,  // Mailchimp only; Kit follows the form's setting
+        'tags' => [],  // Applied to every subscriber the package creates
+        'attributes' => null,  // Closure mapping an entry to provider fields
+        'queue' => [
+            'enabled' => true,  // Sync in a queued job
+            'connection' => null,
+            'queue' => null,
+        ],
+        'timeout' => 10,  // HTTP timeout in seconds
+        'retries' => 2,  // Retries per request
+        'drivers' => [
+            'mailchimp' => [
+                'key' => env('MAILCHIMP_API_KEY'),
+                'server' => env('MAILCHIMP_SERVER_PREFIX'),  // Derived from the key when null
+                'list_id' => env('MAILCHIMP_LIST_ID'),  // Fallback audience
+            ],
+            'kit' => [
+                'key' => env('KIT_API_KEY'),
+                'list_type' => env('KIT_LIST_TYPE', 'form'),  // form or tag
+                'list_id' => env('KIT_FORM_ID'),
+            ],
+        ],
     ],
 ];
 ```
@@ -488,9 +656,12 @@ Indexed fields: `slug`, `is_active`
 - `verification_token` — Token for email verification (nullable)
 - `verified_at` — Timestamp when email was verified (nullable)
 - `invitation_id` — Optional FK to `offload-project/laravel-invite-only` invitation (nullable)
+- `mailing_list_driver` — The driver the entry was synced with (nullable)
+- `mailing_list_subscriber_id` — The subscriber's id on the mailing list service (nullable)
+- `mailing_list_synced_at` — Timestamp of the last successful sync (nullable)
 - `created_at` / `updated_at` — Laravel timestamps
 
-Indexed fields: `status`, `created_at`, `verification_token`
+Indexed fields: `status`, `created_at`, `verification_token`, `mailing_list_synced_at`
 Unique constraint: `['waitlist_id', 'email']` (same email can join multiple waitlists)
 
 ## API Reference
@@ -528,6 +699,37 @@ Waitlist::exists(string $email): bool
 Waitlist::count(): int
 Waitlist::countPending(): int
 Waitlist::countInvited(): int
+
+// Mailing list (uses current waitlist context or default)
+Waitlist::connectMailingList(string $listId, ?string $driver = null): Waitlist
+Waitlist::disconnectMailingList(): Waitlist
+Waitlist::subscribeToMailingList(int|WaitlistEntry $entry): WaitlistEntry
+Waitlist::unsubscribeFromMailingList(int|WaitlistEntry $entry): WaitlistEntry
+Waitlist::syncMailingList(bool $force = false): int
+```
+
+### MailingList Facade Methods
+
+```php
+use OffloadProject\Waitlist\Facades\MailingList;
+
+MailingList::enabled(): bool
+MailingList::driver(?string $name = null): MailingListDriver
+MailingList::for(?Waitlist $waitlist = null): MailingListDriver
+MailingList::driverNameFor(?Waitlist $waitlist = null): string
+MailingList::listIdFor(?Waitlist $waitlist = null): ?string
+MailingList::tagEntry(WaitlistEntry $entry, array $tags): void
+MailingList::extend(string $name, Closure $callback): MailingListManager
+MailingList::fake(?string $listId = null): ArrayDriver  // Testing
+```
+
+Each driver implements `MailingListDriver`:
+
+```php
+$driver->subscribe(WaitlistEntry $entry, string $listId, array $options = []): Subscriber
+$driver->unsubscribe(WaitlistEntry $entry, string $listId): void
+$driver->tag(WaitlistEntry $entry, string $listId, array $tags): void
+$driver->find(string $email, string $listId): ?Subscriber
 ```
 
 ### Waitlist Model Methods
@@ -542,6 +744,12 @@ $waitlist->isActive(): bool
 // Status updates
 $waitlist->activate(): self
 $waitlist->deactivate(): self
+
+// Mailing list
+$waitlist->mailingListId(): ?string
+$waitlist->mailingListDriver(): ?string
+$waitlist->connectMailingList(string $listId, ?string $driver = null): self
+$waitlist->disconnectMailingList(): self
 ```
 
 ### WaitlistEntry Model Methods
@@ -561,6 +769,11 @@ $entry->markAsInvited(): self
 $entry->markAsRejected(): self
 $entry->markAsVerified(): self
 $entry->generateVerificationToken(): self
+
+// Mailing list
+$entry->isSubscribedToMailingList(): bool
+$entry->markAsSubscribed(string $driver, string $subscriberId): self
+$entry->markAsUnsubscribed(): self
 ```
 
 ## AI Coding Assistant Skill
