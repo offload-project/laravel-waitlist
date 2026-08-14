@@ -1,5 +1,13 @@
 # Changelog
 
+## v3.3.0 - 2026-08-14
+
+### Added
+- List serve integration [#21](https://github.com/offload-project/laravel-waitlist/pull/21)
+
+### Documentation
+- Update badges ([07fe6a5](https://github.com/offload-project/laravel-waitlist/commit/07fe6a5f29d16eb655f7a002e17fa7ddaf027dc9))
+
 ## v3.2.0 - 2026-06-14
 
 ### Other
