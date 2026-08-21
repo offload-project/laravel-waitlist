@@ -326,6 +326,133 @@ test('the kit driver can treat the list id as a tag', function () {
     Http::assertSent(fn ($request) => $request->url() === 'https://api.kit.com/v4/tags/tag99/subscribers');
 });
 
+test('the audienceful driver upserts the contact and grants publication consent', function () {
+    useDriver('audienceful', ['key' => 'af-key', 'list_id' => 'pub123']);
+
+    Http::fake([
+        'api.audienceful.com/v2/people' => Http::response([
+            'id' => 'jQKdwqp3YR',
+            'email' => 'john@example.com',
+            'status' => 'active',
+        ]),
+        'api.audienceful.com/v2/people/publications' => Http::response(['data' => []]),
+    ]);
+
+    $entry = Waitlist::add('John Doe', 'john@example.com');
+
+    Http::assertSent(function ($request) {
+        return $request->url() === 'https://api.audienceful.com/v2/people'
+            && $request->method() === 'POST'
+            && $request->hasHeader('X-Api-Key', 'af-key')
+            && $request['email'] === 'john@example.com'
+            && $request['extra_data'] === ['name' => 'John Doe']
+            && ! isset($request['double_opt_in']);
+    });
+
+    Http::assertSent(function ($request) {
+        return $request->url() === 'https://api.audienceful.com/v2/people/publications'
+            && $request['email'] === 'john@example.com'
+            && $request['publications'] === ['pub123' => true];
+    });
+
+    expect($entry->fresh()->mailing_list_subscriber_id)->toBe('jQKdwqp3YR');
+});
+
+test('the audienceful driver asks for double opt-in when it is on', function () {
+    useDriver('audienceful', ['key' => 'af-key', 'list_id' => 'pub123']);
+    config(['waitlist.mailing_list.double_optin' => true]);
+
+    Http::fake(['*' => Http::response(['id' => 'p1', 'email' => 'john@example.com'])]);
+
+    Waitlist::add('John Doe', 'john@example.com');
+
+    Http::assertSent(fn ($request) => $request->url() === 'https://api.audienceful.com/v2/people'
+        && $request['double_opt_in'] === 'required');
+});
+
+test('the audienceful driver can treat the list id as a tag', function () {
+    useDriver('audienceful', ['key' => 'af-key', 'list_id' => 'beta', 'list_type' => 'tag']);
+    config(['waitlist.mailing_list.tags' => ['waitlist']]);
+
+    Http::fake(['*' => Http::response(['id' => 'p1', 'email' => 'john@example.com'])]);
+
+    Waitlist::add('John Doe', 'john@example.com');
+
+    Http::assertSent(fn ($request) => $request['tags'] === ['beta', 'waitlist']);
+    Http::assertNotSent(fn ($request) => str_ends_with($request->url(), '/people/publications'));
+});
+
+test('the audienceful driver withdraws consent for the publication', function () {
+    useDriver('audienceful', ['key' => 'af-key', 'list_id' => 'pub123']);
+    config(['waitlist.mailing_list.auto_subscribe' => false]);
+
+    Http::fake(['*' => Http::response(['data' => []])]);
+
+    $entry = Waitlist::add('John Doe', 'john@example.com');
+    Waitlist::unsubscribeFromMailingList($entry);
+
+    Http::assertSent(function ($request) {
+        return $request->url() === 'https://api.audienceful.com/v2/people/publications'
+            && $request['publications'] === ['pub123' => false];
+    });
+});
+
+test('the audienceful driver unsubscribes workspace wide when lists are tags', function () {
+    useDriver('audienceful', ['key' => 'af-key', 'list_id' => 'beta', 'list_type' => 'tag']);
+    config(['waitlist.mailing_list.auto_subscribe' => false]);
+
+    Http::fake(['*' => Http::response([])]);
+
+    $entry = Waitlist::add('John Doe', 'john@example.com');
+    Waitlist::unsubscribeFromMailingList($entry);
+
+    Http::assertSent(fn ($request) => $request->url() === 'https://api.audienceful.com/v2/people/unsubscribe'
+        && $request['email'] === 'john@example.com');
+});
+
+test('unsubscribing an unknown audienceful contact is not an error', function () {
+    useDriver('audienceful', ['key' => 'af-key', 'list_id' => 'pub123']);
+    config(['waitlist.mailing_list.auto_subscribe' => false]);
+
+    Http::fake(['*' => Http::response(['error' => ['message' => 'Not found.']], 404)]);
+
+    $entry = Waitlist::add('John Doe', 'john@example.com');
+
+    expect(fn () => Waitlist::unsubscribeFromMailingList($entry))->not->toThrow(MailingListException::class);
+});
+
+test('the audienceful driver finds a contact by email', function () {
+    useDriver('audienceful', ['key' => 'af-key', 'list_id' => 'pub123']);
+
+    Http::fake([
+        'api.audienceful.com/v2/people?email=jane*' => Http::response(['data' => []]),
+        'api.audienceful.com/v2/people*' => Http::response([
+            'data' => [['id' => 'p1', 'email' => 'john@example.com', 'status' => 'active']],
+            'has_more' => false,
+            'next_cursor' => null,
+        ]),
+    ]);
+
+    $driver = MailingList::driver('audienceful');
+
+    expect($driver->find('john@example.com', 'pub123'))
+        ->toBeInstanceOf(Subscriber::class)
+        ->id->toBe('p1')
+        ->status->toBe('active')
+        ->and($driver->find('jane@example.com', 'pub123'))->toBeNull();
+});
+
+test('a failing audienceful request raises a mailing list exception', function () {
+    useDriver('audienceful', ['key' => 'af-key', 'list_id' => 'pub123']);
+
+    Http::fake(['*' => Http::response([
+        'error' => ['type' => 'invalid_request_error', 'message' => 'Enter a valid email address.'],
+    ], 400)]);
+
+    expect(fn () => Waitlist::add('John Doe', 'john@example.com'))
+        ->toThrow(MailingListException::class, 'Enter a valid email address.');
+});
+
 test('the log driver never touches the network', function () {
     useDriver('log', ['list_id' => 'log']);
 

@@ -94,7 +94,8 @@ return [
     | Mailing List Integration
     |--------------------------------------------------------------------------
     |
-    | Push waitlist entries to a newsletter service such as Mailchimp or Kit.
+    | Push waitlist entries to a newsletter service such as Mailchimp, Kit
+    | or Audienceful.
     | Connect a waitlist to a list with:
     |
     |     Waitlist::for('beta')->connectMailingList('audience-id');
@@ -108,7 +109,7 @@ return [
 
         /*
         | The driver used by waitlists that have not picked one themselves.
-        | Ships with: mailchimp, kit, log, array.
+        | Ships with: mailchimp, kit, audienceful, log, array.
         */
         'default' => env('WAITLIST_MAILING_LIST_DRIVER', 'log'),
 
@@ -120,7 +121,8 @@ return [
 
         /*
         | Send new contacts a confirmation email before subscribing them.
-        | Mailchimp only — Kit uses the opt-in setting of the form itself.
+        | Honoured by Mailchimp and Audienceful — Kit uses the opt-in setting
+        | of the form itself.
         */
         'double_optin' => env('WAITLIST_MAILING_LIST_DOUBLE_OPTIN', false),
 
@@ -131,8 +133,8 @@ return [
 
         /*
         | A closure mapping an entry to provider fields (Mailchimp merge
-        | fields, Kit custom fields). Note that a config file containing a
-        | closure cannot be cached with `php artisan config:cache`.
+        | fields, Kit or Audienceful custom fields). Note that a config file
+        | containing a closure cannot be cached with `php artisan config:cache`.
         | Example: fn(WaitlistEntry $entry) => ['SOURCE' => $entry->metadata['source'] ?? null]
         */
         'attributes' => null,
@@ -167,6 +169,13 @@ return [
                 // Whether a list id refers to a Kit "form" or a "tag".
                 'list_type' => env('KIT_LIST_TYPE', 'form'),
                 'list_id' => env('KIT_FORM_ID'),
+            ],
+
+            'audienceful' => [
+                'key' => env('AUDIENCEFUL_API_KEY'),
+                // Whether a list id refers to an Audienceful "publication" or a "tag".
+                'list_type' => env('AUDIENCEFUL_LIST_TYPE', 'publication'),
+                'list_id' => env('AUDIENCEFUL_PUBLICATION_ID'),
             ],
 
             'log' => [
