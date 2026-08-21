@@ -1,6 +1,6 @@
 ---
 name: Laravel Waitlist
-description: Conventions and APIs for the offload-project/laravel-waitlist package — multiple waitlists, entry status tracking, optional email verification, lifecycle events, mailing list sync (Mailchimp/Kit), and bridge into laravel-invite-only.
+description: Conventions and APIs for the offload-project/laravel-waitlist package — multiple waitlists, entry status tracking, optional email verification, lifecycle events, mailing list sync (Mailchimp/Kit/Audienceful), and bridge into laravel-invite-only.
 compatible_agents:
   - Claude Code
   - Cursor
@@ -13,6 +13,7 @@ tags:
   - invitations
   - mailing-list
   - mailchimp
+  - audienceful
 ---
 
 ## Context
@@ -25,7 +26,7 @@ tags:
 - Optional bridge into `offload-project/laravel-invite-only`: calling `Waitlist::invite()` creates a real `Invitation` (token, expiration, events) and persists the FK on `WaitlistEntry::$invitation_id`.
 - Two notifications: `WaitlistInvited` (opt-in via `auto_send_invitation`) and `VerifyWaitlistEmail`.
 - Lifecycle events in `OffloadProject\Waitlist\Events`: `WaitlistCreated`, `WaitlistEntryAdded`, `WaitlistEntryVerified`, `WaitlistEntryInvited`, `WaitlistEntryRejected`, plus `WaitlistEntrySubscribed`, `WaitlistEntryUnsubscribed`, and `MailingListSyncFailed`.
-- A mailing list integration (`MailingList` facade, `MailingListManager`) that syncs entries to Mailchimp or Kit (ConvertKit) in a queued job, with `log` and `array` drivers and an `extend()` hook for others.
+- A mailing list integration (`MailingList` facade, `MailingListManager`) that syncs entries to Mailchimp, Kit (ConvertKit) or Audienceful in a queued job, with `log` and `array` drivers and an `extend()` hook for others.
 - Typed exceptions: `UnverifiedEntryException` (invite attempted on an unverified entry while verification gating is on) and `MailingListException` (driver/credential/list-id/API failures).
 
 Apply this skill when working in a Laravel app that has `offload-project/laravel-waitlist` in `composer.json`, or when the user asks for help with `Waitlist`, `WaitlistEntry`, the `Waitlist` or `MailingList` facades, or waitlist flows in this package.
@@ -80,7 +81,7 @@ Apply this skill when working in a Laravel app that has `offload-project/laravel
 
 ### Mailing list sync
 
-23. Turn it on with `waitlist.mailing_list.enabled` and pick a driver (`mailchimp`, `kit`, `log`, `array`). Connect a waitlist to a list with `Waitlist::for($slug)->connectMailingList($listId, $driver = null)` — the list id is a Mailchimp audience id, or a Kit form id (or tag id when `list_type` is `tag`). Waitlists with no list of their own fall back to the driver's configured `list_id`.
+23. Turn it on with `waitlist.mailing_list.enabled` and pick a driver (`mailchimp`, `kit`, `audienceful`, `log`, `array`). Connect a waitlist to a list with `Waitlist::for($slug)->connectMailingList($listId, $driver = null)` — the list id is a Mailchimp audience id, a Kit form id (or tag id when `list_type` is `tag`), or an Audienceful publication id (or tag name when `list_type` is `tag`). Waitlists with no list of their own fall back to the driver's configured `list_id`.
 24. Don't build your own "subscribe on sign up" listener. Subscribing is automatic and follows the verification setting: with `waitlist.verification.enabled` off the entry syncs on `add()`, with it on the entry syncs after `Waitlist::verify()`. That ordering is deliberate — an unconfirmed address must never reach the newsletter.
 25. For anything beyond subscribing — tagging on invite, removing on reject, moving between lists — listen for the lifecycle events and call `MailingList::tagEntry($entry, [...])` or `Waitlist::unsubscribeFromMailingList($entry)`. Don't add those side effects inside the host app's controllers.
 26. Syncing runs through queued jobs (`SyncEntryToMailingList`, `UnsubscribeEntryFromMailingList`). Keep `mailing_list.queue.enabled` on in production so sign ups never block on the provider's API. Backfill existing rows with `php artisan waitlist:sync-mailing-list [slug] [--all] [--force]` or `Waitlist::for($slug)->syncMailingList()`.

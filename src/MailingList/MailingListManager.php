@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Config;
 use OffloadProject\Waitlist\Contracts\MailingListDriver;
 use OffloadProject\Waitlist\Exceptions\MailingListException;
 use OffloadProject\Waitlist\MailingList\Drivers\ArrayDriver;
+use OffloadProject\Waitlist\MailingList\Drivers\AudiencefulDriver;
 use OffloadProject\Waitlist\MailingList\Drivers\KitDriver;
 use OffloadProject\Waitlist\MailingList\Drivers\LogDriver;
 use OffloadProject\Waitlist\MailingList\Drivers\MailchimpDriver;
@@ -145,6 +146,7 @@ final class MailingListManager
         return match ($name) {
             'mailchimp' => $this->createMailchimpDriver($config),
             'kit' => $this->createKitDriver($config),
+            'audienceful' => $this->createAudiencefulDriver($config),
             'log' => new LogDriver(isset($config['channel']) ? (string) $config['channel'] : null),
             'array' => new ArrayDriver(),
             default => throw MailingListException::driverNotSupported($name),
@@ -180,6 +182,23 @@ final class MailingListManager
         return new KitDriver(
             key: (string) $config['key'],
             listType: (string) ($config['list_type'] ?? 'form'),
+            timeout: $this->timeout($config),
+            retries: $this->retries($config),
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $config
+     */
+    private function createAudiencefulDriver(array $config): AudiencefulDriver
+    {
+        if (blank($config['key'] ?? null)) {
+            throw MailingListException::missingCredentials('audienceful', 'key');
+        }
+
+        return new AudiencefulDriver(
+            key: (string) $config['key'],
+            listType: (string) ($config['list_type'] ?? 'publication'),
             timeout: $this->timeout($config),
             retries: $this->retries($config),
         );

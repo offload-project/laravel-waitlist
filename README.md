@@ -19,7 +19,7 @@ implement your own controllers, views, and API endpoints.
 - **Status tracking** — Pending, invited, and rejected states
 - **Email verification** — Optional opt-in verification before inviting users
 - **Event-driven notifications** — Automatic invite + verification notifications, fully customizable
-- **Mailing list sync** — Push entries to Mailchimp or Kit (ConvertKit), or plug in a driver of your own
+- **Mailing list sync** — Push entries to Mailchimp, Kit (ConvertKit) or Audienceful, or plug in a driver of your own
 - **Events** — Hook into every step of the lifecycle, from sign up to invite
 - **Metadata support** — Store custom data with each entry
 - **Invite-only integration** — Optional bridge into `offload-project/laravel-invite-only` for token-based flows
@@ -436,8 +436,8 @@ class CustomVerifyEmail extends Notification
 
 ### Mailing List Integration
 
-Sync entries into a newsletter service as they join. Mailchimp and Kit (ConvertKit) ship with the package, and you can
-register a driver for anything else.
+Sync entries into a newsletter service as they join. Mailchimp, Kit (ConvertKit) and Audienceful ship with the
+package, and you can register a driver for anything else.
 
 ```dotenv
 WAITLIST_MAILING_LIST_ENABLED=true
@@ -451,8 +451,9 @@ Then point a waitlist at a list — the id is whatever the provider calls it:
 ```php
 use OffloadProject\Waitlist\Facades\Waitlist;
 
-Waitlist::for('beta')->connectMailingList('a1b2c3d4e5');          // a Mailchimp audience
-Waitlist::for('launch')->connectMailingList('7654321', 'kit');    // a Kit form, on a different driver
+Waitlist::for('beta')->connectMailingList('a1b2c3d4e5');                    // a Mailchimp audience
+Waitlist::for('launch')->connectMailingList('7654321', 'kit');              // a Kit form, on a different driver
+Waitlist::for('early')->connectMailingList('kR2xN9mDfLpQ', 'audienceful');  // an Audienceful publication
 ```
 
 Each waitlist can sync into a different list, and into a different service. Waitlists that aren't connected fall back to
@@ -470,12 +471,13 @@ the provider's API.
 
 #### Drivers
 
-| Driver      | The list id is                                       | Notes                                                                     |
-|-------------|------------------------------------------------------|---------------------------------------------------------------------------|
-| `mailchimp` | an audience id                                       | Contacts are upserted, so an existing unsubscribe is never overridden       |
-| `kit`       | a form id, or a tag id with `list_type` set to `tag` | Kit unsubscribes are account-wide; double opt-in follows the form's setting |
-| `log`       | anything                                             | Writes what would have been sent to the log — handy for local work          |
-| `array`     | anything                                             | In-memory, used by `MailingList::fake()` in tests                           |
+| Driver         | The list id is                                            | Notes                                                                          |
+|----------------|-----------------------------------------------------------|--------------------------------------------------------------------------------|
+| `mailchimp`    | an audience id                                            | Contacts are upserted, so an existing unsubscribe is never overridden          |
+| `kit`          | a form id, or a tag id with `list_type` set to `tag`      | Kit unsubscribes are account-wide; double opt-in follows the form's setting    |
+| `audienceful`  | a publication id, or a tag name with `list_type` set to `tag` | Unsubscribing withdraws consent for that publication — or, for a tag, workspace wide |
+| `log`          | anything                                                  | Writes what would have been sent to the log — handy for local work             |
+| `array`        | anything                                                  | In-memory, used by `MailingList::fake()` in tests                              |
 
 #### Backfilling existing entries
 
@@ -507,7 +509,7 @@ MailingList::tagEntry($entry, ['beta-cohort']);
 
 #### Custom fields
 
-Map entry data onto Mailchimp merge fields or Kit custom fields:
+Map entry data onto Mailchimp merge fields, or Kit and Audienceful custom fields:
 
 ```php
 // config/waitlist.php
@@ -602,9 +604,9 @@ return [
     // Mailing list integration
     'mailing_list' => [
         'enabled' => false,  // Turn syncing on
-        'default' => 'log',  // mailchimp, kit, log, array — or your own
+        'default' => 'log',  // mailchimp, kit, audienceful, log, array — or your own
         'auto_subscribe' => true,  // Subscribe entries automatically
-        'double_optin' => false,  // Mailchimp only; Kit follows the form's setting
+        'double_optin' => false,  // Mailchimp and Audienceful; Kit follows the form's setting
         'tags' => [],  // Applied to every subscriber the package creates
         'attributes' => null,  // Closure mapping an entry to provider fields
         'queue' => [
@@ -624,6 +626,11 @@ return [
                 'key' => env('KIT_API_KEY'),
                 'list_type' => env('KIT_LIST_TYPE', 'form'),  // form or tag
                 'list_id' => env('KIT_FORM_ID'),
+            ],
+            'audienceful' => [
+                'key' => env('AUDIENCEFUL_API_KEY'),
+                'list_type' => env('AUDIENCEFUL_LIST_TYPE', 'publication'),  // publication or tag
+                'list_id' => env('AUDIENCEFUL_PUBLICATION_ID'),
             ],
         ],
     ],
