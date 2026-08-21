@@ -1,5 +1,10 @@
 # Changelog
 
+## v3.4.0 - 2026-08-21
+
+### Added
+- Add audienceful integration [#23](https://github.com/offload-project/laravel-waitlist/pull/23)
+
 ## v3.3.0 - 2026-08-14
 
 ### Added
