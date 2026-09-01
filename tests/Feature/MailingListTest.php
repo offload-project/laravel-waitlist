@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Queue;
 use OffloadProject\Waitlist\Contracts\MailingListDriver;
@@ -35,22 +34,22 @@ test('it says why in the log when the integration is off', function () {
     MailingList::fake();
     config(['waitlist.mailing_list.enabled' => false]);
 
-    Log::shouldReceive('info')
-        ->once()
-        ->withArgs(fn (string $message): bool => str_contains($message, 'waitlist.mailing_list.enabled'));
+    $log = capturedLog();
 
     Waitlist::add('John Doe', 'john@example.com');
+
+    expect($log)->toHaveLoggedOnce('waitlist.mailing_list.enabled');
 });
 
 test('it says why in the log when auto-subscribing is off', function () {
     MailingList::fake();
     config(['waitlist.mailing_list.auto_subscribe' => false]);
 
-    Log::shouldReceive('info')
-        ->once()
-        ->withArgs(fn (string $message): bool => str_contains($message, 'waitlist.mailing_list.auto_subscribe'));
+    $log = capturedLog();
 
     Waitlist::add('John Doe', 'john@example.com');
+
+    expect($log)->toHaveLoggedOnce('waitlist.mailing_list.auto_subscribe');
 });
 
 /*
@@ -61,15 +60,14 @@ test('it says why in the log while an entry waits to be verified', function () {
     MailingList::fake();
     config(['waitlist.verification.enabled' => true]);
 
-    // The verification email would otherwise go out through the log mail
-    // driver, which reaches for the very facade this test is mocking.
+    // Held back so the verification email cannot write a log line of its own.
     Notification::fake();
 
-    Log::shouldReceive('info')
-        ->once()
-        ->withArgs(fn (string $message): bool => str_contains($message, 'verified'));
+    $log = capturedLog();
 
     Waitlist::add('John Doe', 'john@example.com');
+
+    expect($log)->toHaveLoggedOnce('verified');
 });
 
 /*
