@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Queue;
 use OffloadProject\Waitlist\Contracts\MailingListDriver;
 use OffloadProject\Waitlist\Events\MailingListSyncFailed;
 use OffloadProject\Waitlist\Events\WaitlistEntrySubscribed;
 use OffloadProject\Waitlist\Events\WaitlistEntryUnsubscribed;
+use OffloadProject\Waitlist\Events\WaitlistEntryVerified;
 use OffloadProject\Waitlist\Exceptions\MailingListException;
 use OffloadProject\Waitlist\Facades\MailingList;
 use OffloadProject\Waitlist\Facades\Waitlist;
@@ -26,6 +29,66 @@ test('entries are not synced while the integration is disabled', function () {
     Waitlist::add('John Doe', 'john@example.com');
 
     expect($fake->subscribers())->toBeEmpty();
+});
+
+test('it says why in the log when the integration is off', function () {
+    MailingList::fake();
+    config(['waitlist.mailing_list.enabled' => false]);
+
+    Log::shouldReceive('info')
+        ->once()
+        ->withArgs(fn (string $message): bool => str_contains($message, 'waitlist.mailing_list.enabled'));
+
+    Waitlist::add('John Doe', 'john@example.com');
+});
+
+test('it says why in the log when auto-subscribing is off', function () {
+    MailingList::fake();
+    config(['waitlist.mailing_list.auto_subscribe' => false]);
+
+    Log::shouldReceive('info')
+        ->once()
+        ->withArgs(fn (string $message): bool => str_contains($message, 'waitlist.mailing_list.auto_subscribe'));
+
+    Waitlist::add('John Doe', 'john@example.com');
+});
+
+/*
+ * The one people come looking for: the entry exists, nothing failed, and it is
+ * simply waiting for a click that may never come.
+ */
+test('it says why in the log while an entry waits to be verified', function () {
+    MailingList::fake();
+    config(['waitlist.verification.enabled' => true]);
+
+    // The verification email would otherwise go out through the log mail
+    // driver, which reaches for the very facade this test is mocking.
+    Notification::fake();
+
+    Log::shouldReceive('info')
+        ->once()
+        ->withArgs(fn (string $message): bool => str_contains($message, 'verified'));
+
+    Waitlist::add('John Doe', 'john@example.com');
+});
+
+/*
+ * A verification event with verification switched off is a no-op by design —
+ * the entry was synced when it was added — so it must not sync a second time,
+ * and must not report itself as a skipped sync either.
+ */
+test('a verification event does nothing when verification is off', function () {
+    MailingList::fake('fake-list');
+    config(['waitlist.verification.enabled' => false]);
+    Event::fake([WaitlistEntrySubscribed::class]);
+
+    $entry = Waitlist::add('John Doe', 'john@example.com');
+
+    Event::assertDispatchedTimes(WaitlistEntrySubscribed::class, 1);
+
+    event(new WaitlistEntryVerified($entry));
+
+    Event::assertDispatchedTimes(WaitlistEntrySubscribed::class, 1);
 });
 
 test('adding an entry subscribes it to the mailing list', function () {
