@@ -1,5 +1,10 @@
 # Changelog
 
+## v3.4.1 - 2026-09-01
+
+### Fixed
+- Mailing list subscription integration logging [#25](https://github.com/offload-project/laravel-waitlist/pull/25)
+
 ## v3.4.0 - 2026-08-21
 
 ### Added
