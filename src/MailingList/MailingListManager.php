@@ -8,8 +8,12 @@ use Closure;
 use Illuminate\Support\Facades\Config;
 use OffloadProject\Waitlist\Contracts\MailingListDriver;
 use OffloadProject\Waitlist\Exceptions\MailingListException;
+use OffloadProject\Waitlist\MailingList\ConstantContact\AccessToken;
+use OffloadProject\Waitlist\MailingList\ConstantContact\CacheRefreshTokenStore;
+use OffloadProject\Waitlist\MailingList\ConstantContact\RefreshTokenStore;
 use OffloadProject\Waitlist\MailingList\Drivers\ArrayDriver;
 use OffloadProject\Waitlist\MailingList\Drivers\AudiencefulDriver;
+use OffloadProject\Waitlist\MailingList\Drivers\ConstantContactDriver;
 use OffloadProject\Waitlist\MailingList\Drivers\KitDriver;
 use OffloadProject\Waitlist\MailingList\Drivers\LogDriver;
 use OffloadProject\Waitlist\MailingList\Drivers\MailchimpDriver;
@@ -147,6 +151,7 @@ final class MailingListManager
             'mailchimp' => $this->createMailchimpDriver($config),
             'kit' => $this->createKitDriver($config),
             'audienceful' => $this->createAudiencefulDriver($config),
+            'constant_contact' => $this->createConstantContactDriver($config),
             'log' => new LogDriver(isset($config['channel']) ? (string) $config['channel'] : null),
             'array' => new ArrayDriver(),
             default => throw MailingListException::driverNotSupported($name),
@@ -199,6 +204,38 @@ final class MailingListManager
         return new AudiencefulDriver(
             key: (string) $config['key'],
             listType: (string) ($config['list_type'] ?? 'publication'),
+            timeout: $this->timeout($config),
+            retries: $this->retries($config),
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $config
+     */
+    private function createConstantContactDriver(array $config): ConstantContactDriver
+    {
+        foreach (['client_id', 'client_secret'] as $required) {
+            if (blank($config[$required] ?? null)) {
+                throw MailingListException::missingCredentials('constant_contact', $required);
+            }
+        }
+
+        /*
+         * The store is injectable because the refresh token rotates on every
+         * exchange: an application that cannot afford to lose it to a cache
+         * flush passes its own, backed by a table.
+         */
+        $store = $config['refresh_token_store'] ?? null;
+
+        return new ConstantContactDriver(
+            token: new AccessToken(
+                clientId: (string) $config['client_id'],
+                clientSecret: (string) $config['client_secret'],
+                store: $store instanceof RefreshTokenStore
+                    ? $store
+                    : new CacheRefreshTokenStore(filled($config['refresh_token'] ?? null) ? (string) $config['refresh_token'] : null),
+                timeout: $this->timeout($config),
+            ),
             timeout: $this->timeout($config),
             retries: $this->retries($config),
         );

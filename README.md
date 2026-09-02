@@ -19,7 +19,7 @@ implement your own controllers, views, and API endpoints.
 - **Status tracking** — Pending, invited, and rejected states
 - **Email verification** — Optional opt-in verification before inviting users
 - **Event-driven notifications** — Automatic invite + verification notifications, fully customizable
-- **Mailing list sync** — Push entries to Mailchimp, Kit (ConvertKit) or Audienceful, or plug in a driver of your own
+- **Mailing list sync** — Push entries to Mailchimp, Kit (ConvertKit), Audienceful or Constant Contact, or plug in a driver of your own
 - **Events** — Hook into every step of the lifecycle, from sign up to invite
 - **Metadata support** — Store custom data with each entry
 - **Invite-only integration** — Optional bridge into `offload-project/laravel-invite-only` for token-based flows
@@ -436,8 +436,8 @@ class CustomVerifyEmail extends Notification
 
 ### Mailing List Integration
 
-Sync entries into a newsletter service as they join. Mailchimp, Kit (ConvertKit) and Audienceful ship with the
-package, and you can register a driver for anything else.
+Sync entries into a newsletter service as they join. Mailchimp, Kit (ConvertKit), Audienceful and Constant Contact
+ship with the package, and you can register a driver for anything else.
 
 ```dotenv
 WAITLIST_MAILING_LIST_ENABLED=true
@@ -469,6 +469,22 @@ From there, entries subscribe themselves — and the timing follows your verific
 That way an unconfirmed address never reaches your newsletter. Syncing runs in a queued job, so sign ups never wait on
 the provider's API.
 
+##### Make sure something is reading the queue
+
+The sync is dispatched onto whatever `queue.connection` and `queue.queue` name, and **both fall back to the
+application's defaults when they are null**:
+
+```dotenv
+WAITLIST_MAILING_LIST_QUEUE_CONNECTION=redis
+WAITLIST_MAILING_LIST_QUEUE=waitlist
+```
+
+Whatever you set here, the worker has to be told the same two things — `php artisan queue:work redis --queue=waitlist`.
+Setting one without the other is the failure worth knowing about: the job is dispatched onto a queue nothing is
+reading, so the sign up succeeds, the entry verifies, no exception is raised and nothing is logged, and the entry
+simply never reaches the provider. Putting the sync on its own queue is still worth doing — a provider having a slow
+day should not sit in front of your mail — but an unread queue looks exactly like a broken integration.
+
 #### Drivers
 
 | Driver         | The list id is                                            | Notes                                                                          |
@@ -476,8 +492,45 @@ the provider's API.
 | `mailchimp`    | an audience id                                            | Contacts are upserted, so an existing unsubscribe is never overridden          |
 | `kit`          | a form id, or a tag id with `list_type` set to `tag`      | Kit unsubscribes are account-wide; double opt-in follows the form's setting    |
 | `audienceful`  | a publication id, or a tag name with `list_type` set to `tag` | Unsubscribing withdraws consent for that publication — or, for a tag, workspace wide |
+| `constant_contact` | a contact list id (a UUID)                            | OAuth2 — see below. Unsubscribing leaves the one list, not the account          |
 | `log`          | anything                                                  | Writes what would have been sent to the log — handy for local work             |
 | `array`        | anything                                                  | In-memory, used by `MailingList::fake()` in tests                              |
+
+##### Constant Contact needs authorising by hand
+
+Constant Contact's V3 API is OAuth2 and **none of its flows work without a
+person at a browser** — there is no client-credentials flow, so an application
+cannot get its first token on its own. Authorise the account once, then give the
+package the refresh token it hands back:
+
+```dotenv
+CONSTANT_CONTACT_CLIENT_ID=...
+CONSTANT_CONTACT_CLIENT_SECRET=...
+CONSTANT_CONTACT_REFRESH_TOKEN=...
+CONSTANT_CONTACT_LIST_ID=...
+```
+
+`CONSTANT_CONTACT_REFRESH_TOKEN` is a **seed, not a setting**. Every exchange
+invalidates the token used and issues a replacement, so the value in your
+environment is spent the first time the driver runs. From then on the stored
+rotation is what keeps the connection alive.
+
+By default those rotations are kept in the cache, which asks nothing of your
+application — but a cache flush loses the connection and somebody has to
+authorise the account again. Anything that cannot tolerate that should store
+them itself:
+
+```php
+'constant_contact' => [
+    // ...
+    'refresh_token_store' => new YourTokenTable(),  // implements RefreshTokenStore
+],
+```
+
+Two more differences worth knowing. Access tokens last 24 hours and are cached
+for slightly less, so the driver refreshes roughly once a day on its own. And a
+refresh token expires after 180 days **if it is never used** — a list that goes
+quiet for six months goes dead, and only a human can revive it.
 
 #### Backfilling existing entries
 
@@ -604,15 +657,15 @@ return [
     // Mailing list integration
     'mailing_list' => [
         'enabled' => false,  // Turn syncing on
-        'default' => 'log',  // mailchimp, kit, audienceful, log, array — or your own
+        'default' => 'log',  // mailchimp, kit, audienceful, constant_contact, log, array — or your own
         'auto_subscribe' => true,  // Subscribe entries automatically
         'double_optin' => false,  // Mailchimp and Audienceful; Kit follows the form's setting
         'tags' => [],  // Applied to every subscriber the package creates
         'attributes' => null,  // Closure mapping an entry to provider fields
         'queue' => [
             'enabled' => true,  // Sync in a queued job
-            'connection' => null,
-            'queue' => null,
+            'connection' => null,  // Null uses the app default — make sure a worker reads it
+            'queue' => null,       // Null uses the app default — make sure a worker reads it
         ],
         'timeout' => 10,  // HTTP timeout in seconds
         'retries' => 2,  // Retries per request
@@ -631,6 +684,13 @@ return [
                 'key' => env('AUDIENCEFUL_API_KEY'),
                 'list_type' => env('AUDIENCEFUL_LIST_TYPE', 'publication'),  // publication or tag
                 'list_id' => env('AUDIENCEFUL_PUBLICATION_ID'),
+            ],
+            'constant_contact' => [
+                'client_id' => env('CONSTANT_CONTACT_CLIENT_ID'),
+                'client_secret' => env('CONSTANT_CONTACT_CLIENT_SECRET'),
+                'refresh_token' => env('CONSTANT_CONTACT_REFRESH_TOKEN'),  // A seed; rotations are stored
+                'refresh_token_store' => null,  // A RefreshTokenStore, or the cache when null
+                'list_id' => env('CONSTANT_CONTACT_LIST_ID'),  // A contact list id
             ],
         ],
     ],

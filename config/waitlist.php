@@ -178,6 +178,23 @@ return [
                 'list_id' => env('AUDIENCEFUL_PUBLICATION_ID'),
             ],
 
+            /*
+             * OAuth2 only — there is no API key, and no flow that works
+             * without a person at a browser. `refresh_token` is the one
+             * somebody authorised by hand; it is a seed, not a setting, and is
+             * spent the first time it is exchanged. Set `refresh_token_store`
+             * to a RefreshTokenStore to keep the rotations somewhere sturdier
+             * than the cache.
+             */
+            'constant_contact' => [
+                'client_id' => env('CONSTANT_CONTACT_CLIENT_ID'),
+                'client_secret' => env('CONSTANT_CONTACT_CLIENT_SECRET'),
+                'refresh_token' => env('CONSTANT_CONTACT_REFRESH_TOKEN'),
+                'refresh_token_store' => null,
+                // A contact list id (a UUID), not a form or a tag.
+                'list_id' => env('CONSTANT_CONTACT_LIST_ID'),
+            ],
+
             'log' => [
                 'channel' => env('WAITLIST_MAILING_LIST_LOG_CHANNEL'),
                 'list_id' => 'log',
