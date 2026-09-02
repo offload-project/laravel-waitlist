@@ -1,5 +1,10 @@
 # Changelog
 
+## v3.5.0 - 2026-09-02
+
+### Added
+- Constant contact integration [#27](https://github.com/offload-project/laravel-waitlist/pull/27)
+
 ## v3.4.1 - 2026-09-01
 
 ### Fixed
