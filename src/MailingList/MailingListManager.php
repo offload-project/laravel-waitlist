@@ -11,6 +11,7 @@ use OffloadProject\Waitlist\Exceptions\MailingListException;
 use OffloadProject\Waitlist\MailingList\ConstantContact\AccessToken;
 use OffloadProject\Waitlist\MailingList\ConstantContact\CacheRefreshTokenStore;
 use OffloadProject\Waitlist\MailingList\ConstantContact\RefreshTokenStore;
+use OffloadProject\Waitlist\MailingList\Drivers\ActiveCampaignDriver;
 use OffloadProject\Waitlist\MailingList\Drivers\ArrayDriver;
 use OffloadProject\Waitlist\MailingList\Drivers\AudiencefulDriver;
 use OffloadProject\Waitlist\MailingList\Drivers\ConstantContactDriver;
@@ -152,6 +153,7 @@ final class MailingListManager
             'kit' => $this->createKitDriver($config),
             'audienceful' => $this->createAudiencefulDriver($config),
             'constant_contact' => $this->createConstantContactDriver($config),
+            'activecampaign' => $this->createActiveCampaignDriver($config),
             'log' => new LogDriver(isset($config['channel']) ? (string) $config['channel'] : null),
             'array' => new ArrayDriver(),
             default => throw MailingListException::driverNotSupported($name),
@@ -204,6 +206,25 @@ final class MailingListManager
         return new AudiencefulDriver(
             key: (string) $config['key'],
             listType: (string) ($config['list_type'] ?? 'publication'),
+            timeout: $this->timeout($config),
+            retries: $this->retries($config),
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $config
+     */
+    private function createActiveCampaignDriver(array $config): ActiveCampaignDriver
+    {
+        foreach (['key', 'url'] as $required) {
+            if (blank($config[$required] ?? null)) {
+                throw MailingListException::missingCredentials('activecampaign', $required);
+            }
+        }
+
+        return new ActiveCampaignDriver(
+            key: (string) $config['key'],
+            url: (string) $config['url'],
             timeout: $this->timeout($config),
             retries: $this->retries($config),
         );
