@@ -1,5 +1,10 @@
 # Changelog
 
+## v3.6.0 - 2026-09-09
+
+### Added
+- Active campaign integration [#29](https://github.com/offload-project/laravel-waitlist/pull/29)
+
 ## v3.5.0 - 2026-09-02
 
 ### Added
