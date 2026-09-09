@@ -290,7 +290,7 @@ final class ActiveCampaignDriver implements MailingListDriver
 
     private function request(): PendingRequest
     {
-        return Http::baseUrl(mb_rtrim($this->url, '/').'/api/3')
+        return Http::baseUrl(rtrim($this->url, '/').'/api/3')
             ->withHeaders(['Api-Token' => $this->key])
             ->timeout($this->timeout)
             ->retry(max(1, $this->retries), 250, throw: false)
