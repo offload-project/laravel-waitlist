@@ -19,7 +19,7 @@ implement your own controllers, views, and API endpoints.
 - **Status tracking** — Pending, invited, and rejected states
 - **Email verification** — Optional opt-in verification before inviting users
 - **Event-driven notifications** — Automatic invite + verification notifications, fully customizable
-- **Mailing list sync** — Push entries to Mailchimp, Kit (ConvertKit), Audienceful or Constant Contact, or plug in a driver of your own
+- **Mailing list sync** — Push entries to Mailchimp, Kit (ConvertKit), Audienceful, Constant Contact or ActiveCampaign, or plug in a driver of your own
 - **Events** — Hook into every step of the lifecycle, from sign up to invite
 - **Metadata support** — Store custom data with each entry
 - **Invite-only integration** — Optional bridge into `offload-project/laravel-invite-only` for token-based flows
@@ -436,8 +436,8 @@ class CustomVerifyEmail extends Notification
 
 ### Mailing List Integration
 
-Sync entries into a newsletter service as they join. Mailchimp, Kit (ConvertKit), Audienceful and Constant Contact
-ship with the package, and you can register a driver for anything else.
+Sync entries into a newsletter service as they join. Mailchimp, Kit (ConvertKit), Audienceful, Constant Contact and
+ActiveCampaign ship with the package, and you can register a driver for anything else.
 
 ```dotenv
 WAITLIST_MAILING_LIST_ENABLED=true
@@ -493,8 +493,30 @@ day should not sit in front of your mail — but an unread queue looks exactly l
 | `kit`          | a form id, or a tag id with `list_type` set to `tag`      | Kit unsubscribes are account-wide; double opt-in follows the form's setting    |
 | `audienceful`  | a publication id, or a tag name with `list_type` set to `tag` | Unsubscribing withdraws consent for that publication — or, for a tag, workspace wide |
 | `constant_contact` | a contact list id (a UUID)                            | OAuth2 — see below. Unsubscribing leaves the one list, not the account          |
+| `activecampaign` | a numeric list id                                      | Contacts are upserted by email; unsubscribing sets the list status rather than deleting |
 | `log`          | anything                                                  | Writes what would have been sent to the log — handy for local work             |
 | `array`        | anything                                                  | In-memory, used by `MailingList::fake()` in tests                              |
+
+##### ActiveCampaign
+
+Take both values from Settings → Developer in your ActiveCampaign account:
+
+```dotenv
+ACTIVECAMPAIGN_API_KEY=...
+ACTIVECAMPAIGN_API_URL=https://youraccount.api-us1.com
+ACTIVECAMPAIGN_LIST_ID=7
+```
+
+`ACTIVECAMPAIGN_API_URL` is the account URL exactly as shown there; `/api/3` is
+appended for you, so do not include it.
+
+Everything in ActiveCampaign is addressed by id — lists, tags and custom fields
+— so the driver resolves names to ids for you. Tags are searched before they are
+created, because ActiveCampaign refuses a duplicate and treats tag names
+case-insensitively: a blind create would work on the first sign-up and fail on
+every one after it. An attribute with no matching field on the account is
+dropped rather than sent, since a rejected contact costs the sign-up and a
+missing annotation does not.
 
 ##### Constant Contact needs authorising by hand
 
@@ -657,7 +679,7 @@ return [
     // Mailing list integration
     'mailing_list' => [
         'enabled' => false,  // Turn syncing on
-        'default' => 'log',  // mailchimp, kit, audienceful, constant_contact, log, array — or your own
+        'default' => 'log',  // mailchimp, kit, audienceful, constant_contact, activecampaign, log, array — or your own
         'auto_subscribe' => true,  // Subscribe entries automatically
         'double_optin' => false,  // Mailchimp and Audienceful; Kit follows the form's setting
         'tags' => [],  // Applied to every subscriber the package creates
@@ -684,6 +706,11 @@ return [
                 'key' => env('AUDIENCEFUL_API_KEY'),
                 'list_type' => env('AUDIENCEFUL_LIST_TYPE', 'publication'),  // publication or tag
                 'list_id' => env('AUDIENCEFUL_PUBLICATION_ID'),
+            ],
+            'activecampaign' => [
+                'key' => env('ACTIVECAMPAIGN_API_KEY'),
+                'url' => env('ACTIVECAMPAIGN_API_URL'),  // https://youraccount.api-us1.com — /api/3 is appended
+                'list_id' => env('ACTIVECAMPAIGN_LIST_ID'),  // Numeric
             ],
             'constant_contact' => [
                 'client_id' => env('CONSTANT_CONTACT_CLIENT_ID'),

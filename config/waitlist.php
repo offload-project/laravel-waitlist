@@ -195,6 +195,16 @@ return [
                 'list_id' => env('CONSTANT_CONTACT_LIST_ID'),
             ],
 
+            'activecampaign' => [
+                'key' => env('ACTIVECAMPAIGN_API_KEY'),
+                // The account API URL exactly as ActiveCampaign shows it under
+                // Settings → Developer, e.g. https://youraccount.api-us1.com.
+                // `/api/3` is appended for you.
+                'url' => env('ACTIVECAMPAIGN_API_URL'),
+                // A numeric list id.
+                'list_id' => env('ACTIVECAMPAIGN_LIST_ID'),
+            ],
+
             'log' => [
                 'channel' => env('WAITLIST_MAILING_LIST_LOG_CHANNEL'),
                 'list_id' => 'log',
