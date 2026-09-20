@@ -28,11 +28,11 @@ final class WaitlistInvited extends Notification
     public function toMail(object $notifiable): MailMessage
     {
         return (new MailMessage)
-            ->subject('You\'re Invited!')
-            ->greeting("Hello {$this->entry->name}!")
-            ->line('Great news! You have been invited from our waitlist.')
-            ->line('You can now access our application and start using all the features.')
-            ->action('Get Started', url('/'))
-            ->line('Thank you for your patience!');
+            ->subject(__('waitlist::notifications.invited.subject'))
+            ->markdown('waitlist::mail.invited', [
+                'name' => $this->entry->name,
+                'url' => url('/'),
+                'entry' => $this->entry,
+            ]);
     }
 }

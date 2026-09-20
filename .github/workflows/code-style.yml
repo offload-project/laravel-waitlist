@@ -30,9 +30,11 @@ jobs:
         run: composer install --prefer-dist --no-interaction
 
       - name: Check code style (Pint)
-        run: |
-          composer require laravel/pint --dev --no-interaction
-          vendor/bin/pint --test
+        # The locked Pint, not a freshly required one: `laravel/pint` is
+        # already a dev dependency, and re-requiring it floats CI onto a
+        # version nobody runs locally. `--test` so this reports rather than
+        # silently reformats, which a plain `pint` would do and then pass.
+        run: vendor/bin/pint --test
 
   static-analysis:
     runs-on: ubuntu-latest
@@ -52,6 +54,9 @@ jobs:
         run: composer install --prefer-dist --no-interaction
 
       - name: Run PHPStan
-        run: |
-          composer require phpstan/phpstan --dev --no-interaction
-          vendor/bin/phpstan analyse src --level=5
+        # `composer analyse`, so CI runs exactly what a developer runs. The
+        # previous form installed phpstan separately — larastan already
+        # requires it — and passed `src --level=5` on the command line, which
+        # overrides both the paths and the level in phpstan.neon, so CI was
+        # analysing less code at a lower level than anyone local.
+        run: composer analyse
