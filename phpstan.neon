@@ -6,3 +6,14 @@ parameters:
         - src
     level: 7
     tmpDir: /tmp/phpstan
+
+    ignoreErrors:
+        # The notifications render this package's own views, named through the
+        # `waitlist::` namespace that `loadViewsFrom` registers at runtime.
+        # Analysed on its own there is no application container to register it,
+        # so the names cannot be resolved and every `markdown()` call reads as
+        # an unverifiable view. `NotificationMailTest` renders both, which is
+        # what actually proves they exist.
+        - identifier: argument.type
+          message: '#markdown\(\) expects view-string#'
+          path: src/Notifications/*.php

@@ -37,6 +37,13 @@ final class WaitlistServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        /*
+         * Outside the console guard below: an application needs these to
+         * render mail on a web request, not only when publishing.
+         */
+        $this->loadTranslationsFrom(__DIR__.'/../resources/lang', 'waitlist');
+        $this->loadViewsFrom(__DIR__.'/../resources/views', 'waitlist');
+
         $this->registerRoutes();
         $this->registerListeners();
 
@@ -52,6 +59,20 @@ final class WaitlistServiceProvider extends ServiceProvider
             $this->publishesMigrations([
                 __DIR__.'/../database/migrations' => database_path('migrations'),
             ], 'waitlist-migrations');
+
+            /*
+             * The two emails a waitlist signup actually receives. Their words
+             * used to be hardcoded in the notifications, where nothing
+             * downstream could reach them — and both classes are `final`, so
+             * an application could not even subclass its way out.
+             */
+            $this->publishes([
+                __DIR__.'/../resources/lang' => $this->app->langPath('vendor/waitlist'),
+            ], 'waitlist-lang');
+
+            $this->publishes([
+                __DIR__.'/../resources/views' => $this->app->resourcePath('views/vendor/waitlist'),
+            ], 'waitlist-views');
         }
     }
 

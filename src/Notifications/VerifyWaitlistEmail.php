@@ -27,13 +27,12 @@ final class VerifyWaitlistEmail extends Notification
 
     public function toMail(object $notifiable): MailMessage
     {
-        $url = route('waitlist.verify', ['token' => $this->entry->verification_token]);
-
         return (new MailMessage)
-            ->subject('Verify Your Email Address')
-            ->greeting("Hello {$this->entry->name}!")
-            ->line('Please verify your email address to confirm your spot on the waitlist.')
-            ->action('Verify Email', $url)
-            ->line('If you did not sign up for this waitlist, you can ignore this email.');
+            ->subject(__('waitlist::notifications.verify.subject'))
+            ->markdown('waitlist::mail.verify', [
+                'name' => $this->entry->name,
+                'url' => route('waitlist.verify', ['token' => $this->entry->verification_token]),
+                'entry' => $this->entry,
+            ]);
     }
 }
