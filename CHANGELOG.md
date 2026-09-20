@@ -1,5 +1,10 @@
 # Changelog
 
+## v3.7.0 - 2026-09-20
+
+### Added
+- Publish email templates [#31](https://github.com/offload-project/laravel-waitlist/pull/31)
+
 ## v3.6.0 - 2026-09-09
 
 ### Added
