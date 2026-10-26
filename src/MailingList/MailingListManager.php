@@ -15,6 +15,7 @@ use OffloadProject\Waitlist\MailingList\Drivers\ActiveCampaignDriver;
 use OffloadProject\Waitlist\MailingList\Drivers\ArrayDriver;
 use OffloadProject\Waitlist\MailingList\Drivers\AudiencefulDriver;
 use OffloadProject\Waitlist\MailingList\Drivers\ConstantContactDriver;
+use OffloadProject\Waitlist\MailingList\Drivers\GoHighLevelDriver;
 use OffloadProject\Waitlist\MailingList\Drivers\KitDriver;
 use OffloadProject\Waitlist\MailingList\Drivers\LogDriver;
 use OffloadProject\Waitlist\MailingList\Drivers\MailchimpDriver;
@@ -154,6 +155,7 @@ final class MailingListManager
             'audienceful' => $this->createAudiencefulDriver($config),
             'constant_contact' => $this->createConstantContactDriver($config),
             'activecampaign' => $this->createActiveCampaignDriver($config),
+            'gohighlevel' => $this->createGoHighLevelDriver($config),
             'log' => new LogDriver(isset($config['channel']) ? (string) $config['channel'] : null),
             'array' => new ArrayDriver(),
             default => throw MailingListException::driverNotSupported($name),
@@ -225,6 +227,22 @@ final class MailingListManager
         return new ActiveCampaignDriver(
             key: (string) $config['key'],
             url: (string) $config['url'],
+            timeout: $this->timeout($config),
+            retries: $this->retries($config),
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $config
+     */
+    private function createGoHighLevelDriver(array $config): GoHighLevelDriver
+    {
+        if (blank($config['key'] ?? null)) {
+            throw MailingListException::missingCredentials('gohighlevel', 'key');
+        }
+
+        return new GoHighLevelDriver(
+            key: (string) $config['key'],
             timeout: $this->timeout($config),
             retries: $this->retries($config),
         );

@@ -19,7 +19,7 @@ implement your own controllers, views, and API endpoints.
 - **Status tracking** — Pending, invited, and rejected states
 - **Email verification** — Optional opt-in verification before inviting users
 - **Event-driven notifications** — Automatic invite + verification notifications, fully customizable
-- **Mailing list sync** — Push entries to Mailchimp, Kit (ConvertKit), Audienceful, Constant Contact or ActiveCampaign, or plug in a driver of your own
+- **Mailing list sync** — Push entries to Mailchimp, Kit (ConvertKit), Audienceful, Constant Contact, ActiveCampaign or HighLevel, or plug in a driver of your own
 - **Events** — Hook into every step of the lifecycle, from sign up to invite
 - **Metadata support** — Store custom data with each entry
 - **Invite-only integration** — Optional bridge into `offload-project/laravel-invite-only` for token-based flows
@@ -436,8 +436,8 @@ class CustomVerifyEmail extends Notification
 
 ### Mailing List Integration
 
-Sync entries into a newsletter service as they join. Mailchimp, Kit (ConvertKit), Audienceful, Constant Contact and
-ActiveCampaign ship with the package, and you can register a driver for anything else.
+Sync entries into a newsletter service as they join. Mailchimp, Kit (ConvertKit), Audienceful, Constant Contact,
+ActiveCampaign and HighLevel ship with the package, and you can register a driver for anything else.
 
 ```dotenv
 WAITLIST_MAILING_LIST_ENABLED=true
@@ -494,6 +494,7 @@ day should not sit in front of your mail — but an unread queue looks exactly l
 | `audienceful`  | a publication id, or a tag name with `list_type` set to `tag` | Unsubscribing withdraws consent for that publication — or, for a tag, workspace wide |
 | `constant_contact` | a contact list id (a UUID)                            | OAuth2 — see below. Unsubscribing leaves the one list, not the account          |
 | `activecampaign` | a numeric list id                                      | Contacts are upserted by email; unsubscribing sets the list status rather than deleting |
+| `gohighlevel` | a location (sub-account) id                               | No lists — tags segment within the location; unsubscribing turns on email DND |
 | `log`          | anything                                                  | Writes what would have been sent to the log — handy for local work             |
 | `array`        | anything                                                  | In-memory, used by `MailingList::fake()` in tests                              |
 
@@ -517,6 +518,27 @@ case-insensitively: a blind create would work on the first sign-up and fail on
 every one after it. An attribute with no matching field on the account is
 dropped rather than sent, since a rejected contact costs the sign-up and a
 missing annotation does not.
+
+##### HighLevel
+
+Create a Private Integration Token in the sub-account under Settings → Private
+Integrations, with the contacts and locations scopes, and copy the location id
+from Settings → Business Profile:
+
+```dotenv
+GOHIGHLEVEL_API_KEY=pit-...
+GOHIGHLEVEL_LOCATION_ID=...
+```
+
+HighLevel has no lists. A contact belongs to a location and is segmented by tag,
+so the location id stands in as the list id, and a waitlist that needs its own
+segment should carry its own tag. Unsubscribing turns on email DND for the
+contact; nothing is deleted, and their other channels are left alone.
+
+Tags are sent through the add-tags endpoint rather than with the contact,
+because tags on an upsert replace every tag the contact already has. Custom
+fields are matched by name or field key (`persona` or `contact.persona`), and
+an attribute with no matching field is dropped rather than sent.
 
 ##### Constant Contact needs authorising by hand
 
@@ -679,7 +701,7 @@ return [
     // Mailing list integration
     'mailing_list' => [
         'enabled' => false,  // Turn syncing on
-        'default' => 'log',  // mailchimp, kit, audienceful, constant_contact, activecampaign, log, array — or your own
+        'default' => 'log',  // mailchimp, kit, audienceful, constant_contact, activecampaign, gohighlevel, log, array — or your own
         'auto_subscribe' => true,  // Subscribe entries automatically
         'double_optin' => false,  // Mailchimp and Audienceful; Kit follows the form's setting
         'tags' => [],  // Applied to every subscriber the package creates
@@ -711,6 +733,10 @@ return [
                 'key' => env('ACTIVECAMPAIGN_API_KEY'),
                 'url' => env('ACTIVECAMPAIGN_API_URL'),  // https://youraccount.api-us1.com — /api/3 is appended
                 'list_id' => env('ACTIVECAMPAIGN_LIST_ID'),  // Numeric
+            ],
+            'gohighlevel' => [
+                'key' => env('GOHIGHLEVEL_API_KEY'),  // A Private Integration Token
+                'list_id' => env('GOHIGHLEVEL_LOCATION_ID'),  // The location is the list
             ],
             'constant_contact' => [
                 'client_id' => env('CONSTANT_CONTACT_CLIENT_ID'),

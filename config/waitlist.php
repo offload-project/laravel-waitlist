@@ -205,6 +205,15 @@ return [
                 'list_id' => env('ACTIVECAMPAIGN_LIST_ID'),
             ],
 
+            'gohighlevel' => [
+                // A Private Integration Token from the sub-account, with the
+                // contacts and locations scopes.
+                'key' => env('GOHIGHLEVEL_API_KEY'),
+                // HighLevel has no lists: the location (sub-account) id is the
+                // list, and tags segment within it.
+                'list_id' => env('GOHIGHLEVEL_LOCATION_ID'),
+            ],
+
             'log' => [
                 'channel' => env('WAITLIST_MAILING_LIST_LOG_CHANNEL'),
                 'list_id' => 'log',
