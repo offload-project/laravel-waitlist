@@ -1,5 +1,10 @@
 # Changelog
 
+## v3.8.0 - 2026-10-26
+
+### Added
+- Gohighlevel integration [#33](https://github.com/offload-project/laravel-waitlist/pull/33)
+
 ## v3.7.0 - 2026-09-20
 
 ### Added
